@@ -216,6 +216,109 @@ body {
   font-size: 14px;
 }
 
+/* ---------- Asistencias (admin) ---------- */
+.filtros-asistencia {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.filtros-asistencia .campo {
+  flex: 1 1 180px;
+}
+
+.filtros-asistencia .btn {
+  width: auto;
+}
+
+.bloque-sesion {
+  margin-bottom: 18px;
+}
+
+.encabezado-sesion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.encabezado-sesion h3 {
+  margin: 0;
+  color: var(--azul-oscuro);
+}
+
+.encabezado-sesion .nota {
+  margin-bottom: 0;
+}
+
+.totales-asistencia {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: #556;
+  font-size: 13px;
+}
+
+.totales-asistencia span {
+  padding: 5px 9px;
+  border: 1px solid var(--gris-borde);
+  border-radius: 999px;
+}
+
+.estado-presente {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.estado-falta {
+  background: #fdecea;
+  color: var(--rojo);
+}
+
+.estado-pendiente,
+.estado-proxima {
+  background: #fff3cd;
+  color: #765b00;
+}
+
+.form-correccion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.form-correccion .campo {
+  flex: 0 1 170px;
+}
+
+.form-correccion .motivo-correccion {
+  flex: 1 1 250px;
+}
+
+.form-correccion select,
+.form-correccion input {
+  padding: 9px;
+  border: 1px solid var(--gris-borde);
+  border-radius: 6px;
+  font: inherit;
+}
+
+@media (max-width: 600px) {
+  .filtros-asistencia .btn {
+    flex: 1 1 100%;
+  }
+
+  .encabezado-sesion {
+    align-items: flex-start;
+  }
+}
+
 /* ---------- Módulos (admin) ---------- */
 .volver {
   display: inline-block;
@@ -310,4 +413,59 @@ body {
 
 .tarjeta-enlace:hover {
   border-color: var(--azul);
+}
+
+/* ---------- Importación (admin) ---------- */
+.modulo-destino {
+  margin: 0 0 16px;
+  font-size: 14px;
+}
+
+.importar-controles {
+  align-items: center;
+  margin: 12px 0;
+}
+
+.form-modulo .error,
+.form-modulo .exito {
+  margin: 12px 0;
+}
+
+.vista-previa {
+  max-height: 360px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+/* ---------- Asistencia (estudiante) ---------- */
+.bienvenida .error,
+.bienvenida .exito {
+  margin: 12px 0;
+}
+
+.historial {
+  margin-top: 16px;
+}
+
+.historial h3 {
+  margin: 0 0 12px;
+  color: var(--azul-oscuro);
+}
+
+.resumen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.etiqueta.falta {
+  background: #fdecea;
+  color: var(--rojo);
+}
+
+.etiqueta.hoy {
+  background: #e3edf9;
+  color: var(--azul);
 }
