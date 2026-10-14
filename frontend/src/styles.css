@@ -333,3 +333,36 @@ body {
   overflow-y: auto;
   margin-bottom: 12px;
 }
+
+/* ---------- Asistencia (estudiante) ---------- */
+.bienvenida .error,
+.bienvenida .exito {
+  margin: 12px 0;
+}
+
+.historial {
+  margin-top: 16px;
+}
+
+.historial h3 {
+  margin: 0 0 12px;
+  color: var(--azul-oscuro);
+}
+
+.resumen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.etiqueta.falta {
+  background: #fdecea;
+  color: var(--rojo);
+}
+
+.etiqueta.hoy {
+  background: #e3edf9;
+  color: var(--azul);
+}
