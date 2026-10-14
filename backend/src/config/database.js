@@ -1,6 +1,6 @@
 // Configuración para sequelize-cli (migraciones). La CLI no lee .env sola,
 // por eso lo cargamos aquí. Comparte las mismas variables que env.js.
-require('dotenv').config();
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../../.env') });
 
 function entero(valor, porDefecto) {
   const n = parseInt(valor, 10);

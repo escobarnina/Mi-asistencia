@@ -1,7 +1,7 @@
 // Semilla de datos iniciales (idempotente). Ejecutar con: npm run seed
 // Crea: el administrador (del .env), un "Módulo 1" activo de gestión "2-2026"
 // y 2 estudiantes de prueba inscritos en ese módulo.
-require('dotenv').config();
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
 const { sequelize, Usuario, Modulo, Inscripcion } = require('./models');
 const { hashPassword } = require('./core/security');
 const env = require('./config/env');

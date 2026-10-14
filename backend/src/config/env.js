@@ -1,6 +1,8 @@
 // Configuración centralizada: lee variables del archivo .env (con dotenv).
 // Todo el backend importa desde aquí en lugar de leer process.env disperso.
-require('dotenv').config();
+// Carga el .env de la raíz del repo (si existe). En Docker las variables
+// ya vienen del compose, y si el archivo no está, dotenv simplemente lo ignora.
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../../.env') });
 
 function entero(valor, porDefecto) {
   const n = parseInt(valor, 10);

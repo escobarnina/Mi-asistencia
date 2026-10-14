@@ -1,6 +1,6 @@
 // globalSetup de Jest: crea la base de datos de pruebas (asistencia_test)
 // usando el usuario root y le da permisos al usuario de la app.
-require('dotenv').config();
+require('dotenv').config({ path: require('path').resolve(__dirname, '../../.env') });
 const mysql = require('mysql2/promise');
 
 module.exports = async () => {
