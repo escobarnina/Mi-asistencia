@@ -215,3 +215,99 @@ body {
   color: #556;
   font-size: 14px;
 }
+
+/* ---------- Módulos (admin) ---------- */
+.volver {
+  display: inline-block;
+  margin-bottom: 8px;
+  color: var(--azul);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.exito {
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 10px;
+  border-radius: 6px;
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.form-modulo {
+  margin-bottom: 16px;
+}
+
+.form-modulo h3 {
+  margin: 0 0 12px;
+  color: var(--azul-oscuro);
+}
+
+.fila-campos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.fila-campos .campo {
+  flex: 1 1 180px;
+}
+
+.btn-crear {
+  width: auto;
+}
+
+.tabla-contenedor {
+  overflow-x: auto;
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.tabla th,
+.tabla td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--gris-borde);
+}
+
+.etiqueta {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #eceff3;
+  color: #667;
+  font-size: 12px;
+}
+
+.etiqueta.activa {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.btn-secundario {
+  background: #fff;
+  color: var(--azul);
+  border: 1px solid var(--azul);
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.btn-secundario:hover:not(:disabled) {
+  background: var(--azul);
+  color: #fff;
+}
+
+.tarjeta-enlace {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.tarjeta-enlace:hover {
+  border-color: var(--azul);
+}
