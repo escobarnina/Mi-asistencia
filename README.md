@@ -168,7 +168,7 @@ registro en el historial (RF-09).
 | Router (archivo) | Ruta base | Requisitos | Responsable |
 |---|---|---|---|
 | `src/routers/auth.js` | `/api/auth` | RF-01, RF-02, RF-09 | **Núcleo (ya hecho)** |
-| `src/routers/modulos.js` | `/api/modulos` | RF-13 | _asignar_ |
+| `src/routers/modulos.js` | `/api/modulos` | RF-13 | **Hecho** (ver «Iniciar un módulo nuevo») |
 | `src/routers/importacion.js` | `/api/importacion` | RF-11, RF-12, RF-16 | **Hecho** (ver abajo) |
 | `src/routers/asistencia.js` | `/api/asistencia` | RF-03 a RF-05 | **Hecho** (ver abajo) |
 | `src/routers/admin.js` | `/api/admin` | RF-06 a RF-08, RF-17 | _asignar_ |
@@ -194,9 +194,9 @@ ninguna fila. Así nunca queda una carga a medias.
 | Método | Ruta | Descripción |
 |---|---|---|
 | `POST` | `/api/importacion/estudiantes/revisar` | Vista previa de estudiantes. No guarda. |
-| `POST` | `/api/importacion/estudiantes` | Guarda estudiantes y los inscribe en el módulo activo. |
+| `POST` | `/api/importacion/estudiantes` | Guarda estudiantes y los inscribe en el módulo destino (`modulo_id`, o el activo). |
 | `POST` | `/api/importacion/fechas/revisar` | Vista previa de fechas de clase. No guarda. |
-| `POST` | `/api/importacion/fechas` | Guarda las fechas en `sesion_clase` del módulo activo. |
+| `POST` | `/api/importacion/fechas` | Guarda las fechas en `sesion_clase` del módulo destino (`modulo_id`, o el activo). |
 
 Las rutas de revisión devuelven `{ archivo, total, validas: [...], errores: [{ fila, mensaje }] }`.
 Las de guardado devuelven `201` si todo salió bien, `400` con `errores` si el
@@ -244,6 +244,34 @@ Cada importación guarda un resumen en la tabla `importacion` y registra
 `tests/test_importacion.test.js` y `frontend/src/pages/admin/Estudiantes.jsx`.
 
 ---
+
+## Iniciar un módulo nuevo (RF-13)
+
+Los módulos se preparan **antes** de activarse; el módulo activo no se toca hasta el final.
+
+1. **Crear** (Panel → Módulos → *Nuevo módulo*). Queda **inactivo**.
+2. **Cargar datos** en ese módulo (botón *Cargar datos*): subir el Excel de estudiantes y el
+   de fechas, con la misma vista previa (RF-16). Se validan contra el módulo destino, así que
+   un estudiante o una fecha del módulo anterior se pueden volver a cargar sin problema.
+   Los endpoints de importación aceptan `modulo_id`; sin él usan el módulo activo.
+3. **Activar**: el botón solo se habilita si el módulo tiene al menos 1 estudiante y 1 fecha
+   (el backend lo exige y responde `400` si no). Antes pide confirmación:
+   *«Se activará "X" con N estudiantes y M fechas. El módulo actual dejará de estar activo;
+   sus datos se conservan.»*
+
+Al activar, el módulo anterior solo pasa a inactivo: sus estudiantes, fechas, asistencias y
+actividades **no se borran** (RN-08) y el módulo nuevo empieza sin asistencias. Un módulo que
+ya estuvo activo y fue reemplazado no admite nuevas importaciones.
+`GET /api/modulos` devuelve por módulo `inscritos` y `fechas`. La activación queda en el
+historial (`ACTIVAR_MODULO`).
+
+### Limitación conocida (RN-02)
+
+El **número de registro y el correo son únicos a nivel global** (tabla `usuario`), no solo
+dentro de un módulo. Un mismo estudiante se reutiliza y se vuelve a inscribir en cada módulo
+nuevo sin problema, pero no se puede cargar a otra persona con un número de registro o correo
+que ya pertenece a un estudiante de un módulo anterior, ni cambiar el correo de alguien
+existente por esta vía. Hacerlos únicos solo por módulo requeriría un cambio de esquema.
 
 ## Marcar asistencia (RF-03, RF-04, RF-05)
 

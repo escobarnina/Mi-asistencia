@@ -469,3 +469,32 @@ body {
   background: #e3edf9;
   color: var(--azul);
 }
+
+.acciones-modulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.acciones-modulo .btn {
+  width: auto;
+  text-decoration: none;
+}
+.pasos-modulo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+.pasos-modulo li {
+  padding: 5px 10px;
+  border: 1px solid var(--gris-borde);
+  border-radius: 999px;
+  font-size: 14px;
+}
+.pasos-modulo li.hecho {
+  background: #e8f5e9;
+  color: #2e7d32;
+}

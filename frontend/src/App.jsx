@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import InicioEstudiante from './pages/estudiante/Inicio';
 import InicioAdmin from './pages/admin/Inicio';
 import Modulos from './pages/admin/Modulos';
+import ModuloDatos from './pages/admin/ModuloDatos';
 import Estudiantes from './pages/admin/Estudiantes';
 import Asistencias from './pages/admin/Asistencias';
 import Actividades from './pages/admin/Actividades';
@@ -56,6 +57,17 @@ export default function App() {
               <ProtectedRoute rol="ADMIN">
                 <Layout>
                   <Modulos />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/modulos/:id/datos"
+            element={
+              <ProtectedRoute rol="ADMIN">
+                <Layout>
+                  <ModuloDatos />
                 </Layout>
               </ProtectedRoute>
             }
