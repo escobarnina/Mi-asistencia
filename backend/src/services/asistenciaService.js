@@ -3,18 +3,8 @@
 // una sola vez por estudiante y fecha de clase. "Hoy" es la fecha de La Paz.
 const { Modulo, Inscripcion, SesionClase, Asistencia } = require('../models');
 const { errorHttp } = require('../core/errors');
-const env = require('../config/env');
 const actividadService = require('./actividadService');
-
-// Fecha de hoy en La Paz como 'AAAA-MM-DD' (el formato de sesion_clase.fecha).
-function hoyLaPaz(ahora = new Date()) {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: env.tz,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(ahora);
-}
+const { hoyLaPaz, estadoDeFecha, totalizar } = require('./estadoAsistencia');
 
 // Módulo activo en el que está inscrito el estudiante. Si no hay módulo
 // activo o no está inscrito, no puede usar la asistencia (403).
@@ -138,11 +128,7 @@ async function historial(estudiante) {
 
   const fechas = sesiones.map((s) => {
     const a = porSesion.get(s.id);
-    let estado;
-    if (a) estado = a.estado;
-    else if (s.fecha < hoy) estado = 'FALTA';
-    else if (s.fecha === hoy) estado = 'PENDIENTE';
-    else estado = 'PROXIMA';
+    const estado = estadoDeFecha(s.fecha, hoy, a);
     return {
       ...sesionPublica(s),
       estado,
@@ -150,17 +136,12 @@ async function historial(estudiante) {
     };
   });
 
-  const contar = (estado) => fechas.filter((f) => f.estado === estado).length;
+  const { total, presentes, faltas, pendientes } = totalizar(fechas.map((f) => f.estado));
   return {
     modulo: { id: modulo.id, nombre: modulo.nombre, gestion: modulo.gestion },
     hoy,
     fechas,
-    resumen: {
-      total: fechas.length,
-      presentes: contar('PRESENTE'),
-      faltas: contar('FALTA'),
-      pendientes: contar('PENDIENTE') + contar('PROXIMA'),
-    },
+    resumen: { total, presentes, faltas, pendientes },
   };
 }
 

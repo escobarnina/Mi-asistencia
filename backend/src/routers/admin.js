@@ -1,9 +1,23 @@
 // Panel de asistencias del administrador (RF-06 a RF-08, RF-17).
+//
+//   GET /api/admin/estudiantes?q=                       lista del módulo activo (RF-06)
+//   GET /api/admin/asistencias?fecha=&estudiante=       vista general con totales (RF-08)
+//   GET /api/admin/asistencias/exportar                 el mismo reporte en .xlsx (RF-17)
+//   PUT /api/admin/asistencias/:sesionId/:estudianteId  corrección auditada (RF-07)
+//
+// El estado de cada fecha sale de services/estadoAsistencia.js (RF-04): una fecha
+// pasada sin marca es FALTA sin que el administrador tenga que generar nada.
 const express = require('express');
+const ExcelJS = require('exceljs');
 const { Op } = require('sequelize');
 const { getCurrentUser, requireAdmin } = require('../middleware/auth');
 const { errorHttp } = require('../core/errors');
-const env = require('../config/env');
+const {
+  hoyLaPaz,
+  estadoDeFecha,
+  esFaltaAutomatica,
+  totalizar,
+} = require('../services/estadoAsistencia');
 const {
   sequelize,
   Usuario,
@@ -40,52 +54,73 @@ function validarFecha(fecha) {
   return fecha;
 }
 
-function fechaHoraLocal() {
-  const partes = new Intl.DateTimeFormat('en-CA', {
-    timeZone: env.tz,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
-  }).formatToParts(new Date());
-  const valores = Object.fromEntries(partes.map(({ type, value }) => [type, value]));
+// Escapa \, % y _ para que el texto buscado se tome literalmente en un LIKE.
+function textoLike(texto) {
+  return texto.replace(/[\\%_]/g, '\\$&');
+}
+
+function leerBusqueda(valor, etiqueta) {
+  const texto = typeof valor === 'string' ? valor.trim() : '';
+  if (texto.length > 100) throw errorHttp(400, `${etiqueta} es demasiado largo`);
+  return texto;
+}
+
+// Estudiantes cuyo nombre o número de registro contiene el texto (vacío = todos).
+function filtroEstudiante(texto) {
+  const where = { rol: 'ESTUDIANTE' };
+  if (texto) {
+    const like = `%${textoLike(texto)}%`;
+    where[Op.or] = [{ nombre: { [Op.like]: like } }, { codigo: { [Op.like]: like } }];
+  }
+  return where;
+}
+
+function inscritosDelModulo(moduloId, texto) {
+  return Inscripcion.findAll({
+    where: { modulo_id: moduloId },
+    include: [{
+      model: Usuario,
+      as: 'estudiante',
+      attributes: ['id', 'codigo', 'nombre', 'email'],
+      where: filtroEstudiante(texto),
+      required: true,
+    }],
+    order: [[{ model: Usuario, as: 'estudiante' }, 'nombre', 'ASC']],
+  });
+}
+
+// RF-06: estudiantes inscritos en el módulo activo.
+async function listarEstudiantes({ q }) {
+  const texto = leerBusqueda(q, 'El texto de búsqueda');
+  const modulo = await Modulo.findOne({ where: { activo: true } });
+  if (!modulo) return { modulo: null, total: 0, estudiantes: [] };
+  const inscripciones = await inscritosDelModulo(modulo.id, texto);
+  const estudiantes = inscripciones.map((i) => i.estudiante.get({ plain: true }));
   return {
-    fecha: `${valores.year}-${valores.month}-${valores.day}`,
-    hora: `${valores.hour}:${valores.minute}:${valores.second}`,
+    modulo: { id: modulo.id, nombre: modulo.nombre, gestion: modulo.gestion },
+    total: estudiantes.length,
+    estudiantes,
   };
 }
 
+// RF-08: sesiones del módulo activo con el estado de cada inscrito y los totales.
 async function obtenerReporte({ fecha, estudiante }) {
+  const hoy = hoyLaPaz();
+  const vacio = { hoy, totales: totalizar([]), sesiones: [] };
   const modulo = await Modulo.findOne({ where: { activo: true } });
-  if (!modulo) return { modulo: null, sesiones: [] };
+  if (!modulo) return { modulo: null, ...vacio };
 
   const whereSesion = { modulo_id: modulo.id };
   if (fecha) whereSesion.fecha = validarFecha(fecha);
+  const texto = leerBusqueda(estudiante, 'El filtro de estudiante');
   const sesionesDb = await SesionClase.findAll({
     where: whereSesion,
     order: [['fecha', 'ASC'], ['id', 'ASC']],
   });
   const moduloPublico = { id: modulo.id, nombre: modulo.nombre, gestion: modulo.gestion };
-  if (sesionesDb.length === 0) return { modulo: moduloPublico, sesiones: [] };
+  if (sesionesDb.length === 0) return { modulo: moduloPublico, ...vacio };
 
-  const texto = typeof estudiante === 'string' ? estudiante.trim() : '';
-  if (texto.length > 100) throw errorHttp(400, 'El filtro de estudiante es demasiado largo');
-  const whereEstudiante = { rol: 'ESTUDIANTE' };
-  if (texto) {
-    whereEstudiante[Op.or] = [
-      { nombre: { [Op.like]: `%${texto}%` } },
-      { codigo: { [Op.like]: `%${texto}%` } },
-    ];
-  }
-  const inscripciones = await Inscripcion.findAll({
-    where: { modulo_id: modulo.id },
-    include: [{
-      model: Usuario,
-      as: 'estudiante',
-      attributes: ['id', 'codigo', 'nombre', 'email'],
-      where: whereEstudiante,
-      required: true,
-    }],
-    order: [[{ model: Usuario, as: 'estudiante' }, 'nombre', 'ASC']],
-  });
+  const inscripciones = await inscritosDelModulo(modulo.id, texto);
   const estudiantes = inscripciones.map((inscripcion) => inscripcion.estudiante);
   const idsSesion = sesionesDb.map((sesion) => sesion.id);
   const idsEstudiante = estudiantes.map((est) => est.id);
@@ -105,34 +140,33 @@ async function obtenerReporte({ fecha, estudiante }) {
   const sesiones = sesionesDb.map((sesionDb) => {
     const sesion = sesionDb.get({ plain: true });
     const filas = estudiantes.map((estudianteDb) => {
+      // El registro guardado (marca o corrección del admin) siempre prevalece.
       const asistencia = porClave.get(`${sesion.id}:${estudianteDb.id}`);
+      const automatica = esFaltaAutomatica(sesion.fecha, hoy, asistencia);
       return {
         asistencia_id: asistencia ? asistencia.id : null,
-        estudiante: estudianteDb.get ? estudianteDb.get({ plain: true }) : estudianteDb,
-        estado: asistencia ? asistencia.estado : 'SIN_REGISTRO',
+        estudiante: estudianteDb.get({ plain: true }),
+        estado: estadoDeFecha(sesion.fecha, hoy, asistencia),
         hora_registro: asistencia ? asistencia.hora_registro : null,
-        origen: asistencia ? asistencia.origen : null,
+        origen: asistencia ? asistencia.origen : automatica ? 'SISTEMA' : null,
+        automatica,
       };
     });
-    return {
-      ...sesion,
-      presentes: filas.filter((fila) => fila.estado === 'PRESENTE').length,
-      faltas: filas.filter((fila) => fila.estado === 'FALTA').length,
-      sin_registro: filas.filter((fila) => fila.estado === 'SIN_REGISTRO').length,
-      asistencias: filas,
-    };
+    const { presentes, faltas, pendientes } = totalizar(filas.map((fila) => fila.estado));
+    return { ...sesion, presentes, faltas, pendientes, asistencias: filas };
   });
-  return { modulo: moduloPublico, sesiones };
+  const totales = totalizar(
+    sesiones.flatMap((sesion) => sesion.asistencias.map((fila) => fila.estado))
+  );
+  return { modulo: moduloPublico, hoy, totales, sesiones };
 }
 
-function csvCelda(valor) {
-  let texto = valor === null || valor === undefined ? '' : String(valor);
-  const primerCaracter = texto[0];
-  if (['=', '+', '-', '@', String.fromCharCode(9), String.fromCharCode(13)].includes(primerCaracter)) {
-    texto = `'${texto}`;
-  }
-  return `"${texto.replace(/"/g, '""')}"`;
-}
+const NOMBRE_ESTADO = {
+  PRESENTE: 'Presente',
+  FALTA: 'Falta',
+  PENDIENTE: 'Pendiente',
+  PROXIMA: 'Pendiente',
+};
 
 function horaEnLaPaz(valor) {
   if (!valor) return '';
@@ -145,22 +179,49 @@ function horaEnLaPaz(valor) {
   }).format(new Date(valor));
 }
 
-function reporteACsv(reporte) {
-  const filas = [[
-    'Fecha', 'Número de registro', 'Nombre', 'Correo electrónico',
-    'Estado', 'Hora de registro', 'Origen',
-  ]];
+// RF-17: arma el .xlsx con los mismos estados que ve el administrador en pantalla.
+async function reporteAXlsx(reporte) {
+  const libro = new ExcelJS.Workbook();
+  const hoja = libro.addWorksheet('Asistencias');
+  hoja.columns = [
+    { header: 'Fecha', key: 'fecha', width: 12 },
+    { header: 'Número de registro', key: 'codigo', width: 20 },
+    { header: 'Nombre', key: 'nombre', width: 32 },
+    { header: 'Correo electrónico', key: 'email', width: 32 },
+    { header: 'Estado', key: 'estado', width: 12 },
+    { header: 'Hora de registro', key: 'hora', width: 16 },
+    { header: 'Origen', key: 'origen', width: 12 },
+  ];
+  hoja.getRow(1).font = { bold: true };
   for (const sesion of reporte.sesiones) {
     for (const fila of sesion.asistencias) {
-      filas.push([
-        sesion.fecha, fila.estudiante.codigo, fila.estudiante.nombre,
-        fila.estudiante.email, fila.estado, horaEnLaPaz(fila.hora_registro), fila.origen,
-      ]);
+      hoja.addRow({
+        fecha: sesion.fecha,
+        codigo: fila.estudiante.codigo || '',
+        nombre: fila.estudiante.nombre,
+        email: fila.estudiante.email,
+        estado: NOMBRE_ESTADO[fila.estado] || fila.estado,
+        hora: horaEnLaPaz(fila.hora_registro),
+        origen: fila.origen || '',
+      });
     }
   }
-  const salto = String.fromCharCode(13, 10);
-  return `${String.fromCharCode(0xfeff)}${filas.map((fila) => fila.map(csvCelda).join(',')).join(salto)}${salto}`;
+  // Los textos van como texto con formato: ninguna celda se interpreta como fórmula.
+  hoja.eachRow((fila) => fila.eachCell((celda) => {
+    if (typeof celda.value === 'string') {
+      celda.value = { richText: [{ text: celda.value }] };
+    }
+  }));
+  return libro.xlsx.writeBuffer();
 }
+
+router.get('/estudiantes', getCurrentUser, requireAdmin, async (req, res, next) => {
+  try {
+    res.json(await listarEstudiantes(req.query));
+  } catch (e) {
+    next(e);
+  }
+});
 
 router.get('/asistencias/exportar', getCurrentUser, requireAdmin, async (req, res, next) => {
   try {
@@ -173,10 +234,10 @@ router.get('/asistencias/exportar', getCurrentUser, requireAdmin, async (req, re
       detalle: 'Exportación de asistencias del módulo activo',
       ip: ipDe(req),
     });
-    const fechaArchivo = req.query.fecha ? validarFecha(req.query.fecha) : fechaHoraLocal().fecha;
-    res.set('Content-Type', 'text/csv; charset=utf-8');
-    res.set('Content-Disposition', `attachment; filename="asistencias-${fechaArchivo}.csv"`);
-    res.send(reporteACsv(reporte));
+    const fechaArchivo = req.query.fecha ? validarFecha(req.query.fecha) : hoyLaPaz();
+    res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.set('Content-Disposition', `attachment; filename="asistencias-${fechaArchivo}.xlsx"`);
+    res.send(Buffer.from(await reporteAXlsx(reporte)));
   } catch (e) {
     next(e);
   }
@@ -220,7 +281,10 @@ router.put('/asistencias/:sesionId/:estudianteId', getCurrentUser, requireAdmin,
         where: { sesion_id: sesion.id, estudiante_id: estudianteId },
         transaction, lock: transaction.LOCK.UPDATE,
       });
-      const estadoAnterior = asistencia ? asistencia.estado : null;
+      // Lo que el administrador veía: el estado guardado o, si la fecha ya pasó
+      // sin marca, la falta automática (RF-04). Hoy o futuro sin marca = sin estado previo.
+      const faltaAutomatica = esFaltaAutomatica(sesion.fecha, hoyLaPaz(), asistencia);
+      const estadoAnterior = asistencia ? asistencia.estado : faltaAutomatica ? 'FALTA' : null;
       if (estadoAnterior === estado) return { asistencia, sin_cambios: true };
       if (asistencia) {
         await asistencia.update(
@@ -250,7 +314,7 @@ router.put('/asistencias/:sesionId/:estudianteId', getCurrentUser, requireAdmin,
         accion: 'MODIFICAR_ASISTENCIA',
         entidad: 'ASISTENCIA',
         entidad_id: asistencia.id,
-        detalle: `${estadoAnterior || 'SIN_REGISTRO'} → ${estado}. Motivo: ${motivo.trim()}`,
+        detalle: `${estadoAnterior || 'PENDIENTE'} → ${estado}. Motivo: ${motivo.trim()}`,
         ip: ipDe(req),
       }, { transaction });
       return { asistencia, sin_cambios: false };
@@ -261,61 +325,6 @@ router.put('/asistencias/:sesionId/:estudianteId', getCurrentUser, requireAdmin,
       sin_cambios: resultado.sin_cambios,
       detalle: resultado.sin_cambios ? 'La asistencia ya tenía ese estado' : 'Asistencia corregida',
     });
-  } catch (e) {
-    next(e);
-  }
-});
-
-router.post('/faltas/generar', getCurrentUser, requireAdmin, async (req, res, next) => {
-  try {
-    const ahora = fechaHoraLocal();
-    const resultado = await sequelize.transaction(async (transaction) => {
-      const modulo = await Modulo.findOne({
-        where: { activo: true }, transaction, lock: transaction.LOCK.UPDATE,
-      });
-      if (!modulo) throw errorHttp(404, 'No hay un módulo activo');
-      const sesion = await SesionClase.findOne({
-        where: { modulo_id: modulo.id, fecha: ahora.fecha }, transaction,
-      });
-      if (!sesion) throw errorHttp(404, 'No hay una sesión de clase para hoy');
-      if (String(sesion.hora_fin) > ahora.hora) {
-        throw errorHttp(409, 'Las faltas se generan cuando termina la sesión');
-      }
-
-      const inscripciones = await Inscripcion.findAll({
-        where: { modulo_id: modulo.id }, attributes: ['estudiante_id'], transaction,
-      });
-      const idsEstudiante = inscripciones.map((inscripcion) => inscripcion.estudiante_id);
-      const registradas = idsEstudiante.length
-        ? await Asistencia.findAll({
-            where: { sesion_id: sesion.id, estudiante_id: { [Op.in]: idsEstudiante } },
-            attributes: ['estudiante_id'], transaction, lock: transaction.LOCK.UPDATE,
-          })
-        : [];
-      const yaRegistrados = new Set(registradas.map((asistencia) => asistencia.estudiante_id));
-      const faltas = idsEstudiante
-        .filter((estudianteId) => !yaRegistrados.has(estudianteId))
-        .map((estudianteId) => ({
-          sesion_id: sesion.id,
-          estudiante_id: estudianteId,
-          estado: 'FALTA',
-          hora_registro: null,
-          origen: 'SISTEMA',
-        }));
-      if (faltas.length) await Asistencia.bulkCreate(faltas, { transaction });
-      await Actividad.create({
-        modulo_id: modulo.id,
-        usuario_id: req.usuario.id,
-        accion: 'GENERAR_FALTAS',
-        entidad: 'SESION_CLASE',
-        entidad_id: sesion.id,
-        detalle: `Faltas generadas: ${faltas.length}`,
-        ip: ipDe(req),
-      }, { transaction });
-      return { generadas: faltas.length, fecha: ahora.fecha };
-    });
-
-    res.json({ ...resultado, detalle: `Se generaron ${resultado.generadas} faltas` });
   } catch (e) {
     next(e);
   }
