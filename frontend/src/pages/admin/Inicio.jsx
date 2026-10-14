@@ -12,7 +12,11 @@ const TARJETAS = [
     descripcion: 'Consultar, corregir y exportar asistencias.',
     ruta: '/admin/asistencias',
   },
-  { titulo: 'Actividades', descripcion: 'Historial de acciones del sistema.' },
+  {
+    titulo: 'Actividades',
+    descripcion: 'Historial de acciones del sistema.',
+    ruta: '/admin/actividades',
+  },
   {
     titulo: 'Módulos',
     descripcion: 'Crear módulos y definir el módulo activo.',
