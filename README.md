@@ -170,7 +170,7 @@ registro en el historial (RF-09).
 | `src/routers/auth.js` | `/api/auth` | RF-01, RF-02, RF-09 | **Núcleo (ya hecho)** |
 | `src/routers/modulos.js` | `/api/modulos` | RF-13 | _asignar_ |
 | `src/routers/importacion.js` | `/api/importacion` | RF-11, RF-12, RF-16 | **Hecho** (ver abajo) |
-| `src/routers/asistencia.js` | `/api/asistencia` | RF-03 a RF-05 | _asignar_ |
+| `src/routers/asistencia.js` | `/api/asistencia` | RF-03 a RF-05 | **Hecho** (ver abajo) |
 | `src/routers/admin.js` | `/api/admin` | RF-06 a RF-08, RF-17 | _asignar_ |
 | `src/routers/actividades.js` | `/api/actividades` | RF-10 | _asignar_ |
 
@@ -242,6 +242,49 @@ Cada importación guarda un resumen en la tabla `importacion` y registra
 **Archivos:** `src/routers/importacion.js`, `src/services/importacionService.js`,
 `src/services/excelService.js`, `src/schemas/importacion.js`,
 `tests/test_importacion.test.js` y `frontend/src/pages/admin/Estudiantes.jsx`.
+
+---
+
+## Marcar asistencia (RF-03, RF-04, RF-05)
+
+El estudiante marca su asistencia desde su página de inicio (`/estudiante`) y ve
+su historial con un resumen.
+
+**Reglas para marcar** (si no se cumple alguna, el botón queda deshabilitado y se
+explica el motivo):
+1. Hay un módulo activo y el estudiante está inscrito en él.
+2. Hoy hay una fecha de clase (`sesion_clase`) en el módulo activo. "Hoy" se calcula
+   con la zona horaria de La Paz.
+3. Esa clase no está cerrada (`cerrada = false`).
+4. El estudiante no tiene ya un registro para esa clase (una sola marca).
+
+Se puede marcar **todo el día de clase**; el horario es solo informativo (RF-12).
+La marca guarda `estado = PRESENTE`, `origen = ESTUDIANTE`, la hora real y la IP,
+y registra `MARCAR_ASISTENCIA` en el historial.
+
+### Endpoints (solo ESTUDIANTE)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/asistencia/hoy` | Clase de hoy, marca existente, `puedeMarcar` y `motivo`. |
+| `POST` | `/api/asistencia/marcar` | Marca PRESENTE en la clase de hoy. `409` si no se puede (con el motivo). |
+| `GET` | `/api/asistencia/mis-asistencias` | Fechas del módulo activo con su estado y `resumen`. |
+
+**Estados del historial:**
+
+| Estado | Significado |
+|---|---|
+| `PRESENTE` / `FALTA` | Lo que esté guardado en `asistencia`. |
+| `FALTA` (calculada) | Fecha pasada sin registro (RF-04). |
+| `PENDIENTE` | Hoy, todavía sin marcar. |
+| `PROXIMA` | Fecha futura. |
+
+> **Para el panel admin (área 4):** esta parte **no guarda** las faltas; solo las
+> muestra calculadas. "Generar faltas del día" (origen `SISTEMA`) y las
+> correcciones con auditoría quedan para `routers/admin.js`.
+
+**Archivos:** `src/routers/asistencia.js`, `src/services/asistenciaService.js`,
+`tests/test_asistencia.test.js` y `frontend/src/pages/estudiante/Inicio.jsx`.
 
 ---
 
