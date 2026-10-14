@@ -4,7 +4,11 @@ import { Link } from 'react-router-dom';
 const TARJETAS = [
   { titulo: 'Estudiantes', descripcion: 'Gestión e importación de estudiantes.' },
   { titulo: 'Asistencias', descripcion: 'Ver y corregir asistencias.' },
-  { titulo: 'Actividades', descripcion: 'Historial de acciones del sistema.' },
+  {
+    titulo: 'Actividades',
+    descripcion: 'Historial de acciones del sistema.',
+    ruta: '/admin/actividades',
+  },
   {
     titulo: 'Módulos',
     descripcion: 'Crear módulos y definir el módulo activo.',
