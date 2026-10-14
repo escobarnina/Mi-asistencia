@@ -16,7 +16,7 @@ function mensajeDe(error, porDefecto) {
 function estadoVisible(estado) {
   if (estado === 'PRESENTE') return 'Presente';
   if (estado === 'FALTA') return 'Falta';
-  return 'Sin registro';
+  return 'Pendiente';
 }
 
 export default function Asistencias() {
@@ -25,6 +25,7 @@ export default function Asistencias() {
   const [filtros, setFiltros] = useState({ fecha: FECHA_HOY, estudiante: '' });
   const [sesiones, setSesiones] = useState([]);
   const [modulo, setModulo] = useState(null);
+  const [totales, setTotales] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [aviso, setAviso] = useState('');
@@ -48,6 +49,7 @@ export default function Asistencias() {
         if (!vigente) return;
         setModulo(res.data.modulo);
         setSesiones(res.data.sesiones);
+        setTotales(res.data.totales);
       })
       .catch((e) => {
         if (vigente) setError(mensajeDe(e, 'No se pudieron cargar las asistencias'));
@@ -66,21 +68,6 @@ export default function Asistencias() {
     setFiltros({ fecha, estudiante });
   }
 
-  async function generarFaltas() {
-    setError('');
-    setAviso('');
-    setAccion('faltas');
-    try {
-      const res = await client.post('/admin/faltas/generar');
-      setAviso(res.data.detalle);
-      setRecarga((n) => n + 1);
-    } catch (e) {
-      setError(mensajeDe(e, 'No se pudieron generar las faltas'));
-    } finally {
-      setAccion('');
-    }
-  }
-
   async function exportar() {
     setError('');
     setAviso('');
@@ -96,12 +83,12 @@ export default function Asistencias() {
       const url = URL.createObjectURL(res.data);
       const enlace = document.createElement('a');
       enlace.href = url;
-      enlace.download = `asistencias-${filtros.fecha || FECHA_HOY}.csv`;
+      enlace.download = `asistencias-${filtros.fecha || FECHA_HOY}.xlsx`;
       document.body.appendChild(enlace);
       enlace.click();
       enlace.remove();
       URL.revokeObjectURL(url);
-      setAviso('La exportación se descargó en formato CSV compatible con Excel.');
+      setAviso('La exportación a Excel se descargó correctamente.');
     } catch (e) {
       setError(mensajeDe(e, 'No se pudieron exportar las asistencias'));
     } finally {
@@ -164,20 +151,20 @@ export default function Asistencias() {
         <button
           className="btn btn-secundario"
           type="button"
-          onClick={generarFaltas}
-          disabled={Boolean(accion)}
-        >
-          {accion === 'faltas' ? 'Generando…' : 'Generar faltas de hoy'}
-        </button>
-        <button
-          className="btn btn-secundario"
-          type="button"
           onClick={exportar}
           disabled={Boolean(accion)}
         >
-          {accion === 'exportar' ? 'Exportando…' : 'Exportar CSV'}
+          {accion === 'exportar' ? 'Exportando…' : 'Exportar a Excel'}
         </button>
       </form>
+
+      {totales && !cargando && sesiones.length > 0 && (
+        <div className="totales-asistencia" aria-label="Totales generales">
+          <span>Presentes: {totales.presentes}</span>
+          <span>Faltas: {totales.faltas}</span>
+          <span>Pendientes: {totales.pendientes}</span>
+        </div>
+      )}
 
       {cargando ? (
         <p className="nota">Cargando asistencias…</p>
@@ -196,7 +183,7 @@ export default function Asistencias() {
               <div className="totales-asistencia" aria-label="Totales de asistencia">
                 <span>Presentes: {sesion.presentes}</span>
                 <span>Faltas: {sesion.faltas}</span>
-                <span>Sin registro: {sesion.sin_registro}</span>
+                <span>Pendientes: {sesion.pendientes}</span>
               </div>
             </div>
             <div className="tabla-contenedor">
@@ -268,6 +255,7 @@ function FragmentFila({
           <span className={`etiqueta estado-${fila.estado.toLowerCase()}`}>
             {estadoVisible(fila.estado)}
           </span>
+          {fila.automatica && <span className="nota"> (automática)</span>}
         </td>
         <td>{fila.hora_registro ? new Intl.DateTimeFormat('es-BO', { timeZone: 'America/La_Paz', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(fila.hora_registro)) : '—'}</td>
         <td>

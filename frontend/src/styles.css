@@ -279,7 +279,8 @@ body {
   color: var(--rojo);
 }
 
-.estado-sin_registro {
+.estado-pendiente,
+.estado-proxima {
   background: #fff3cd;
   color: #765b00;
 }
