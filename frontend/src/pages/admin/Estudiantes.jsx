@@ -41,7 +41,7 @@ const FECHAS = {
 
 // Bloque de importación: elegir archivo -> Revisar (vista previa, RF-16)
 // -> Confirmar carga. Si el archivo tiene errores se listan y no se guarda nada.
-function ImportarExcel({ config, hayModulo }) {
+function ImportarExcel({ config, hayModulo, onImportado }) {
   const [archivo, setArchivo] = useState(null);
   const [inputKey, setInputKey] = useState(0); // para limpiar el <input type="file">
   const [revision, setRevision] = useState(null);
@@ -84,6 +84,7 @@ function ImportarExcel({ config, hayModulo }) {
     try {
       const res = await enviar(config.ruta);
       setAviso(res.data.detalle);
+      if (onImportado) onImportado();
       setRevision(null);
       setArchivo(null);
       setInputKey((k) => k + 1);
@@ -189,8 +190,107 @@ function ImportarExcel({ config, hayModulo }) {
 }
 
 // Importación de estudiantes y fechas de clase al módulo activo.
+// RF-06: lista de estudiantes inscritos en el módulo activo, con buscador.
+function ListaEstudiantes({ recarga }) {
+  const [texto, setTexto] = useState('');
+  const [consulta, setConsulta] = useState('');
+  const [datos, setDatos] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let vigente = true;
+    setError('');
+    client
+      .get('/admin/estudiantes', { params: { q: consulta.trim() || undefined } })
+      .then((res) => {
+        if (vigente) setDatos(res.data);
+      })
+      .catch((e) => {
+        if (vigente) setError(mensajeDe(e, 'No se pudo cargar la lista de estudiantes'));
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [consulta, recarga]);
+
+  function buscar(evento) {
+    evento.preventDefault();
+    setConsulta(texto);
+  }
+
+  return (
+    <div className="tarjeta lista-estudiantes">
+      <h3>Lista de estudiantes del módulo activo</h3>
+      <form className="filtros-asistencia" onSubmit={buscar}>
+        <label className="campo">
+          Buscar
+          <input
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            maxLength={100}
+            placeholder="Nombre o número de registro"
+          />
+        </label>
+        <button className="btn btn-principal btn-crear" type="submit">
+          Buscar
+        </button>
+        {consulta && (
+          <button
+            className="btn btn-secundario"
+            type="button"
+            onClick={() => {
+              setTexto('');
+              setConsulta('');
+            }}
+          >
+            Limpiar
+          </button>
+        )}
+      </form>
+      {error && <p className="error">{error}</p>}
+      {!datos && !error && <p className="nota">Cargando estudiantes…</p>}
+      {datos && !datos.modulo && <p className="nota">No hay un módulo activo.</p>}
+      {datos && datos.modulo && (
+        <>
+          <p className="nota">
+            {datos.total} {datos.total === 1 ? 'estudiante' : 'estudiantes'}
+            {consulta ? ' encontrados' : ' inscritos'}
+          </p>
+          {datos.total === 0 ? (
+            <p className="nota">
+              {consulta ? 'Ningún estudiante coincide con la búsqueda.' : 'Aún no hay estudiantes inscritos.'}
+            </p>
+          ) : (
+            <div className="tabla-contenedor">
+              <table className="tabla">
+                <thead>
+                  <tr>
+                    <th>Número de registro</th>
+                    <th>Nombre</th>
+                    <th>Correo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {datos.estudiantes.map((e) => (
+                    <tr key={e.id}>
+                      <td>{e.codigo || '—'}</td>
+                      <td>{e.nombre}</td>
+                      <td>{e.email}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function Estudiantes() {
   const [modulo, setModulo] = useState(undefined); // undefined = cargando
+  const [recarga, setRecarga] = useState(0); // refresca la lista tras importar
 
   useEffect(() => {
     client
@@ -220,8 +320,13 @@ export default function Estudiantes() {
         </p>
       )}
 
-      <ImportarExcel config={ESTUDIANTES} hayModulo={!!modulo} />
+      <ImportarExcel
+        config={ESTUDIANTES}
+        hayModulo={!!modulo}
+        onImportado={() => setRecarga((n) => n + 1)}
+      />
       <ImportarExcel config={FECHAS} hayModulo={!!modulo} />
+      <ListaEstudiantes recarga={recarga} />
     </div>
   );
 }
