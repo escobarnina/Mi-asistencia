@@ -1,20 +1,26 @@
 // Lógica de negocio de módulos (RF-13): crear, listar, editar y activar.
 // Regla clave: solo puede haber UN módulo activo a la vez.
-const { sequelize, Modulo } = require('../models');
+const { sequelize, Modulo, Inscripcion, SesionClase } = require('../models');
 const { errorHttp } = require('../core/errors');
 const actividadService = require('./actividadService');
 
-// Cantidad de estudiantes inscritos, calculada en la misma consulta.
+// Cantidad de estudiantes inscritos y de fechas de clase, calculadas en la misma consulta.
 const INSCRITOS = [
   sequelize.literal(
     '(SELECT COUNT(*) FROM inscripcion WHERE inscripcion.modulo_id = Modulo.id)'
   ),
   'inscritos',
 ];
+const FECHAS = [
+  sequelize.literal(
+    '(SELECT COUNT(*) FROM sesion_clase WHERE sesion_clase.modulo_id = Modulo.id)'
+  ),
+  'fechas',
+];
 
 async function obtener(id) {
   const modulo = await Modulo.findByPk(id, {
-    attributes: { include: [INSCRITOS] },
+    attributes: { include: [INSCRITOS, FECHAS] },
   });
   if (!modulo) throw errorHttp(404, 'Módulo no encontrado');
   return modulo;
@@ -23,7 +29,7 @@ async function obtener(id) {
 // El módulo activo va primero; luego los más recientes.
 async function listar() {
   return Modulo.findAll({
-    attributes: { include: [INSCRITOS] },
+    attributes: { include: [INSCRITOS, FECHAS] },
     order: [
       ['activo', 'DESC'],
       ['creado_en', 'DESC'],
@@ -35,7 +41,7 @@ async function listar() {
 async function obtenerActivo() {
   return Modulo.findOne({
     where: { activo: true },
-    attributes: { include: [INSCRITOS] },
+    attributes: { include: [INSCRITOS, FECHAS] },
   });
 }
 
@@ -73,10 +79,31 @@ async function editar(id, datos) {
   return obtener(modulo.id);
 }
 
+// RF-13: un módulo solo se activa si ya tiene estudiantes y fechas de clase.
+async function exigirDatosCompletos(modulo, transaction) {
+  const [inscritos, fechas] = await Promise.all([
+    Inscripcion.count({ where: { modulo_id: modulo.id }, transaction }),
+    SesionClase.count({ where: { modulo_id: modulo.id }, transaction }),
+  ]);
+  const faltan = [];
+  if (inscritos === 0) faltan.push('estudiantes inscritos');
+  if (fechas === 0) faltan.push('fechas de clase');
+  if (faltan.length) {
+    throw errorHttp(
+      400,
+      `No se puede activar "${modulo.nombre}": todavía no tiene ${faltan.join(' ni ')}. ` +
+        'Importa los datos antes de activarlo'
+    );
+  }
+  return { inscritos, fechas };
+}
+
 // Activa un módulo y desactiva el resto, todo en una sola transacción.
+// Los datos del módulo anterior no se tocan: solo deja de estar activo (RN-08).
 // Primero se desactivan los demás para respetar el UNIQUE de la base
 // (columna generada activo_unico) y nunca quedar con dos activos.
 async function activar(id, usuario, ip) {
+  let resumen = null;
   const yaActivo = await sequelize.transaction(async (t) => {
     const modulo = await Modulo.findByPk(id, {
       transaction: t,
@@ -84,6 +111,7 @@ async function activar(id, usuario, ip) {
     });
     if (!modulo) throw errorHttp(404, 'Módulo no encontrado');
     if (modulo.activo) return true;
+    resumen = await exigirDatosCompletos(modulo, t);
 
     await Modulo.update(
       { activo: false },
@@ -101,7 +129,7 @@ async function activar(id, usuario, ip) {
     await actividadService.registrar(usuario.id, 'ACTIVAR_MODULO', {
       entidad: 'modulo',
       entidadId: id,
-      detalle: 'Módulo activado',
+      detalle: `Módulo activado (${resumen.inscritos} estudiantes, ${resumen.fechas} fechas)`,
       ip,
       moduloId: id,
     });
