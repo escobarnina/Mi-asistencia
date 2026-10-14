@@ -169,10 +169,122 @@ registro en el historial (RF-09).
 |---|---|---|---|
 | `src/routers/auth.js` | `/api/auth` | RF-01, RF-02, RF-09 | **Núcleo (ya hecho)** |
 | `src/routers/modulos.js` | `/api/modulos` | RF-13 | _asignar_ |
-| `src/routers/importacion.js` | `/api/importacion` | RF-11, RF-12, RF-16 | _asignar_ |
-| `src/routers/asistencia.js` | `/api/asistencia` | RF-03 a RF-05 | _asignar_ |
+| `src/routers/importacion.js` | `/api/importacion` | RF-11, RF-12, RF-16 | **Hecho** (ver abajo) |
+| `src/routers/asistencia.js` | `/api/asistencia` | RF-03 a RF-05 | **Hecho** (ver abajo) |
 | `src/routers/admin.js` | `/api/admin` | RF-06 a RF-08, RF-17 | _asignar_ |
 | `src/routers/actividades.js` | `/api/actividades` | RF-10 | _asignar_ |
+
+---
+
+## Importación desde Excel (RF-11, RF-12, RF-16)
+
+El administrador carga los **estudiantes** y las **fechas de clase** del módulo
+activo desde archivos `.xlsx`. En el frontend: panel admin → tarjeta
+**"Estudiantes"** (`/admin/estudiantes`).
+
+**Flujo:** el admin sube el archivo y pulsa **Revisar** (vista previa, no guarda
+nada). Si hay errores se listan por fila. Si no hay errores, pulsa
+**Confirmar carga** y se guarda todo.
+
+**Regla "todo o nada":** si el archivo tiene **un solo error**, no se guarda
+ninguna fila. Así nunca queda una carga a medias.
+
+### Endpoints (solo ADMIN, archivo en el campo `archivo`, máx. 5 MB)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/api/importacion/estudiantes/revisar` | Vista previa de estudiantes. No guarda. |
+| `POST` | `/api/importacion/estudiantes` | Guarda estudiantes y los inscribe en el módulo activo. |
+| `POST` | `/api/importacion/fechas/revisar` | Vista previa de fechas de clase. No guarda. |
+| `POST` | `/api/importacion/fechas` | Guarda las fechas en `sesion_clase` del módulo activo. |
+
+Las rutas de revisión devuelven `{ archivo, total, validas: [...], errores: [{ fila, mensaje }] }`.
+Las de guardado devuelven `201` si todo salió bien, `400` con `errores` si el
+archivo tiene errores, o `409` si no hay un módulo activo.
+
+### Formato de los Excel
+
+Primera hoja, primera fila = encabezados (se aceptan con o sin tildes/mayúsculas).
+
+**Estudiantes:**
+
+| Número de registro | Nombre completo | Correo electrónico |
+|---|---|---|
+| 1001 | Juan Pérez | juan@gmail.com |
+
+**Fechas de clase:**
+
+| Fecha | Hora inicio | Hora fin |
+|---|---|---|
+| 05/10/2026 | 18:00 | 21:00 |
+
+La fecha se lee como **día/mes/año**. También se aceptan celdas con formato de
+fecha/hora de Excel.
+
+### Qué se valida
+
+- **Estudiantes:** campos obligatorios, correo válido y números de registro o correos
+  repetidos en el archivo. También que el número no esté registrado con otro correo
+  (o al revés) y que no pertenezca a un administrador.
+  - Si el estudiante ya existe de un módulo anterior, no se duplica: solo se inscribe
+    (y se reactiva si estaba inactivo).
+  - Si ya estaba inscrito, se omite.
+- **Fechas:** fecha real (no 31/02), horas válidas, hora de fin posterior a la de
+  inicio, fechas repetidas en el archivo y fechas que ya existen en el módulo activo.
+
+Cada importación guarda un resumen en la tabla `importacion` y registra
+`IMPORTAR_ESTUDIANTES` / `IMPORTAR_FECHAS` en el historial de actividad.
+
+> **Para "Marcar asistencia" (área 3):** las fechas importadas quedan en
+> `sesion_clase` (`modulo_id`, `fecha` como `AAAA-MM-DD`, `hora_inicio`, `hora_fin`,
+> `cerrada = false`). Esas son las fechas en las que se habilita el botón.
+
+**Archivos:** `src/routers/importacion.js`, `src/services/importacionService.js`,
+`src/services/excelService.js`, `src/schemas/importacion.js`,
+`tests/test_importacion.test.js` y `frontend/src/pages/admin/Estudiantes.jsx`.
+
+---
+
+## Marcar asistencia (RF-03, RF-04, RF-05)
+
+El estudiante marca su asistencia desde su página de inicio (`/estudiante`) y ve
+su historial con un resumen.
+
+**Reglas para marcar** (si no se cumple alguna, el botón queda deshabilitado y se
+explica el motivo):
+1. Hay un módulo activo y el estudiante está inscrito en él.
+2. Hoy hay una fecha de clase (`sesion_clase`) en el módulo activo. "Hoy" se calcula
+   con la zona horaria de La Paz.
+3. Esa clase no está cerrada (`cerrada = false`).
+4. El estudiante no tiene ya un registro para esa clase (una sola marca).
+
+Se puede marcar **todo el día de clase**; el horario es solo informativo (RF-12).
+La marca guarda `estado = PRESENTE`, `origen = ESTUDIANTE`, la hora real y la IP,
+y registra `MARCAR_ASISTENCIA` en el historial.
+
+### Endpoints (solo ESTUDIANTE)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/api/asistencia/hoy` | Clase de hoy, marca existente, `puedeMarcar` y `motivo`. |
+| `POST` | `/api/asistencia/marcar` | Marca PRESENTE en la clase de hoy. `409` si no se puede (con el motivo). |
+| `GET` | `/api/asistencia/mis-asistencias` | Fechas del módulo activo con su estado y `resumen`. |
+
+**Estados del historial:**
+
+| Estado | Significado |
+|---|---|
+| `PRESENTE` / `FALTA` | Lo que esté guardado en `asistencia`. |
+| `FALTA` (calculada) | Fecha pasada sin registro (RF-04). |
+| `PENDIENTE` | Hoy, todavía sin marcar. |
+| `PROXIMA` | Fecha futura. |
+
+> **Para el panel admin (área 4):** esta parte **no guarda** las faltas; solo las
+> muestra calculadas. "Generar faltas del día" (origen `SISTEMA`) y las
+> correcciones con auditoría quedan para `routers/admin.js`.
+
+**Archivos:** `src/routers/asistencia.js`, `src/services/asistenciaService.js`,
+`tests/test_asistencia.test.js` y `frontend/src/pages/estudiante/Inicio.jsx`.
 
 ---
 

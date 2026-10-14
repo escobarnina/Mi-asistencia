@@ -2,7 +2,11 @@ import { Link } from 'react-router-dom';
 
 // Inicio del administrador: tarjetas marcadoras de las funciones que vienen.
 const TARJETAS = [
-  { titulo: 'Estudiantes', descripcion: 'Gestión e importación de estudiantes.' },
+  {
+    titulo: 'Estudiantes',
+    descripcion: 'Importar estudiantes y fechas de clase desde Excel.',
+    ruta: '/admin/estudiantes',
+  },
   {
     titulo: 'Asistencias',
     descripcion: 'Consultar, corregir y exportar asistencias.',
