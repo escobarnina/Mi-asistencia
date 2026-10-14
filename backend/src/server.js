@@ -4,13 +4,13 @@ const express = require('express');
 const cors = require('cors');
 const env = require('./config/env');
 
-// Routers que deja listos el equipo (stubs vacíos por ahora).
+// Router de autenticación (login/logout/me) + stubs que deja listos el equipo.
+const authRouter = require('./routers/auth');
 const modulosRouter = require('./routers/modulos');
 const importacionRouter = require('./routers/importacion');
 const asistenciaRouter = require('./routers/asistencia');
 const adminRouter = require('./routers/admin');
 const actividadesRouter = require('./routers/actividades');
-// El router de autenticación (login/logout/me) se añade en el paso de routers.
 
 const app = express();
 
@@ -26,6 +26,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // Routers de la aplicación (todos bajo /api).
+app.use('/api/auth', authRouter);
 app.use('/api/modulos', modulosRouter);
 app.use('/api/importacion', importacionRouter);
 app.use('/api/asistencia', asistenciaRouter);
