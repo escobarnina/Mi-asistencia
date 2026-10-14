@@ -47,8 +47,13 @@ function inicioDelDia(fecha, etiqueta) {
 
 // Rango [inicio, fin) de los días pedidos; `fecha` (un solo día) manda sobre desde/hasta.
 function rangoDeFechas({ fecha, desde, hasta }) {
-  if (fecha) desde = hasta = fecha;
   const rango = {};
+  if (fecha) {
+    const inicio = inicioDelDia(fecha, 'La fecha');
+    rango[Op.gte] = inicio;
+    rango[Op.lt] = new Date(inicio.getTime() + MS_DIA);
+    return rango;
+  }
   if (desde) rango[Op.gte] = inicioDelDia(desde, 'La fecha desde');
   if (hasta) {
     rango[Op.lt] = new Date(inicioDelDia(hasta, 'La fecha hasta').getTime() + MS_DIA);

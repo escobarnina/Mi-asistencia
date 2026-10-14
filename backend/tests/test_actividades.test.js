@@ -202,7 +202,9 @@ describe('Historial de actividades (RF-10)', () => {
   });
 
   test('rechaza fechas inválidas o invertidas', async () => {
-    expect((await listar({ fecha: '13/10/2026' })).status).toBe(400);
+    const mala = await listar({ fecha: '13/10/2026' });
+    expect(mala.status).toBe(400);
+    expect(mala.body.detalle).toContain('La fecha debe tener el formato');
     expect((await listar({ fecha: '2026-02-30' })).status).toBe(400);
     expect((await listar({ desde: '2026-10-14', hasta: '2026-10-13' })).status).toBe(400);
   });
