@@ -311,3 +311,25 @@ body {
 .tarjeta-enlace:hover {
   border-color: var(--azul);
 }
+
+/* ---------- Importación (admin) ---------- */
+.modulo-destino {
+  margin: 0 0 16px;
+  font-size: 14px;
+}
+
+.importar-controles {
+  align-items: center;
+  margin: 12px 0;
+}
+
+.form-modulo .error,
+.form-modulo .exito {
+  margin: 12px 0;
+}
+
+.vista-previa {
+  max-height: 360px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}

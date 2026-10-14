@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import InicioEstudiante from './pages/estudiante/Inicio';
 import InicioAdmin from './pages/admin/Inicio';
 import Modulos from './pages/admin/Modulos';
+import Estudiantes from './pages/admin/Estudiantes';
 
 export default function App() {
   return (
@@ -42,6 +43,17 @@ export default function App() {
               <ProtectedRoute rol="ADMIN">
                 <Layout>
                   <Modulos />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/estudiantes"
+            element={
+              <ProtectedRoute rol="ADMIN">
+                <Layout>
+                  <Estudiantes />
                 </Layout>
               </ProtectedRoute>
             }
