@@ -7,7 +7,11 @@ const TARJETAS = [
     descripcion: 'Importar estudiantes y fechas de clase desde Excel.',
     ruta: '/admin/estudiantes',
   },
-  { titulo: 'Asistencias', descripcion: 'Ver y corregir asistencias.' },
+  {
+    titulo: 'Asistencias',
+    descripcion: 'Consultar, corregir y exportar asistencias.',
+    ruta: '/admin/asistencias',
+  },
   {
     titulo: 'Actividades',
     descripcion: 'Historial de acciones del sistema.',

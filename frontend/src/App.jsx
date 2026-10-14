@@ -8,6 +8,7 @@ import InicioAdmin from './pages/admin/Inicio';
 import Modulos from './pages/admin/Modulos';
 import Estudiantes from './pages/admin/Estudiantes';
 import Actividades from './pages/admin/Actividades';
+import Asistencias from './pages/admin/Asistencias';
 
 export default function App() {
   return (
@@ -33,6 +34,17 @@ export default function App() {
               <ProtectedRoute rol="ADMIN">
                 <Layout>
                   <InicioAdmin />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/asistencias"
+            element={
+              <ProtectedRoute rol="ADMIN">
+                <Layout>
+                  <Asistencias />
                 </Layout>
               </ProtectedRoute>
             }
