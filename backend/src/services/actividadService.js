@@ -1,9 +1,13 @@
-// Servicio de historial de actividad (RF-09).
+// Servicio de historial de actividad (RF-09 y RF-10).
 // registrar(...) deja un registro en la tabla actividad y le asigna
 // automáticamente el módulo activo (si no se indica otro).
-// El resto del equipo lo usará para sus propias acciones.
+// listar(...) devuelve el historial del módulo activo para el administrador.
 const { Op } = require('sequelize');
 const { Actividad, Modulo, Usuario } = require('../models');
+const { errorHttp } = require('../core/errors');
+const env = require('../config/env');
+
+const MS_DIA = 24 * 60 * 60 * 1000;
 
 async function moduloActivoId() {
   const modulo = await Modulo.findOne({ where: { activo: true } });
@@ -27,66 +31,98 @@ async function registrar(
   });
 }
 
+// Inicio (00:00) de un día 'AAAA-MM-DD' en la zona horaria de la app
+// (America/La_Paz, UTC-4 sin horario de verano). Así el día se calcula igual
+// que como se guardan los registros, sin depender de la zona del servidor.
+function inicioDelDia(fecha, etiqueta) {
+  if (typeof fecha !== 'string' || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(fecha)) {
+    throw errorHttp(400, `${etiqueta} debe tener el formato AAAA-MM-DD`);
+  }
+  const inicio = new Date(`${fecha}T00:00:00${env.tzOffset}`);
+  const valido = !Number.isNaN(inicio.getTime())
+    && new Date(`${fecha}T00:00:00Z`).toISOString().slice(0, 10) === fecha;
+  if (!valido) throw errorHttp(400, `${etiqueta} no es una fecha válida`);
+  return inicio;
+}
+
+// Rango [inicio, fin) de los días pedidos; `fecha` (un solo día) manda sobre desde/hasta.
+function rangoDeFechas({ fecha, desde, hasta }) {
+  if (fecha) desde = hasta = fecha;
+  const rango = {};
+  if (desde) rango[Op.gte] = inicioDelDia(desde, 'La fecha desde');
+  if (hasta) {
+    rango[Op.lt] = new Date(inicioDelDia(hasta, 'La fecha hasta').getTime() + MS_DIA);
+  }
+  if (rango[Op.gte] && rango[Op.lt] && rango[Op.gte] >= rango[Op.lt]) {
+    throw errorHttp(400, 'La fecha desde no puede ser posterior a la fecha hasta');
+  }
+  return Object.getOwnPropertySymbols(rango).length ? rango : null;
+}
+
+// Escapa \, % y _ para que el texto buscado se tome literalmente en un LIKE.
+const textoLike = (texto) => texto.replace(/[\\%_]/g, '\\$&');
+
+// RF-10: historial de acciones del MÓDULO ACTIVO. Filtros opcionales:
+//   estudiante  nombre o número de registro (contiene)
+//   fecha       un día 'AAAA-MM-DD' (día de La Paz); o desde / hasta (rango de días)
+//   accion      código exacto de la acción
 async function listar({
-  moduloId,
-  accion,
-  usuarioId,
+  estudiante,
+  fecha,
   desde,
   hasta,
+  accion,
   pagina = 1,
   limite = 20,
 } = {}) {
   const page = Math.max(1, Number(pagina) || 1);
   const limit = Math.min(100, Math.max(1, Number(limite) || 20));
-  const offset = (page - 1) * limit;
+  const texto = typeof estudiante === 'string' ? estudiante.trim() : '';
+  if (texto.length > 100) throw errorHttp(400, 'El filtro de estudiante es demasiado largo');
+  const rango = rangoDeFechas({ fecha, desde, hasta });
 
-  const where = {};
+  const modulo = await Modulo.findOne({
+    where: { activo: true },
+    attributes: ['id', 'nombre', 'gestion'],
+  });
+  const vacio = {
+    modulo: null,
+    total: 0,
+    pagina: page,
+    limite: limit,
+    totalPaginas: 1,
+    actividades: [],
+  };
+  if (!modulo) return vacio;
 
-  if (moduloId) {
-    where.modulo_id = Number(moduloId);
-  }
+  const where = { modulo_id: modulo.id };
+  if (accion) where.accion = String(accion);
+  if (rango) where.creado_en = rango;
 
-  if (accion) {
-    where.accion = accion;
-  }
-
-  if (usuarioId) {
-    where.usuario_id = Number(usuarioId);
-  }
-
-  if (desde || hasta) {
-    where.creado_en = {};
-    if (desde) {
-      where.creado_en[Op.gte] = new Date(desde);
-    }
-    if (hasta) {
-      // Ajustar a fin de día si es solo fecha YYYY-MM-DD
-      const fechaHasta = new Date(hasta);
-      if (hasta.length === 10) {
-        fechaHasta.setHours(23, 59, 59, 999);
-      }
-      where.creado_en[Op.lte] = fechaHasta;
-    }
+  const whereUsuario = {};
+  if (texto) {
+    const like = `%${textoLike(texto)}%`;
+    whereUsuario[Op.or] = [{ nombre: { [Op.like]: like } }, { codigo: { [Op.like]: like } }];
   }
 
   const { count, rows } = await Actividad.findAndCountAll({
     where,
     include: [
-      {
-        model: Modulo,
-        attributes: ['id', 'nombre', 'gestion'],
-      },
+      { model: Modulo, attributes: ['id', 'nombre', 'gestion'] },
       {
         model: Usuario,
         attributes: ['id', 'nombre', 'email', 'codigo', 'rol'],
+        where: texto ? whereUsuario : undefined,
+        required: Boolean(texto),
       },
     ],
-    order: [['creado_en', 'DESC']],
+    order: [['creado_en', 'DESC'], ['id', 'DESC']],
     limit,
-    offset,
+    offset: (page - 1) * limit,
   });
 
   return {
+    modulo: { id: modulo.id, nombre: modulo.nombre, gestion: modulo.gestion },
     total: count,
     pagina: page,
     limite: limit,

@@ -2,19 +2,21 @@ const express = require('express');
 const { getCurrentUser, requireAdmin } = require('../middleware/auth');
 const actividadService = require('../services/actividadService');
 
-// RF-10: consulta del historial de actividad (filtros por módulo/fecha/acción/usuario y paginación).
+// RF-10: historial de actividad del módulo activo. Solo ADMIN (403 para estudiantes).
+// Filtros: estudiante (nombre o número de registro), fecha | desde | hasta
+// (días de La Paz), accion. Con paginación (pagina, limite).
 const router = express.Router();
 
 router.get('/', getCurrentUser, requireAdmin, async (req, res, next) => {
   try {
-    const { modulo_id, accion, usuario_id, desde, hasta, pagina, limite } = req.query;
+    const { estudiante, fecha, desde, hasta, accion, pagina, limite } = req.query;
 
     const resultado = await actividadService.listar({
-      moduloId: modulo_id,
-      accion,
-      usuarioId: usuario_id,
+      estudiante,
+      fecha,
       desde,
       hasta,
+      accion,
       pagina,
       limite,
     });
