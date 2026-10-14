@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import client from '../../api/client';
+import { puedeActivar, textoFaltante, mensajeConfirmacion } from '../../api/modulos';
 
 function mensajeDe(error, porDefecto) {
   return error.response?.data?.detalle || porDefecto;
 }
 
-// Gestión de módulos (RF-13): lista, crea y activa. Solo uno puede estar activo.
+// Gestión de módulos (RF-13). Flujo de un módulo nuevo:
+//   1. Crear el módulo (queda inactivo).  2. Cargar sus estudiantes y fechas.
+//   3. Activarlo (solo si ya tiene ambos). Solo uno puede estar activo.
 export default function Modulos() {
+  const navegar = useNavigate();
   const [modulos, setModulos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [nombre, setNombre] = useState('');
@@ -38,14 +42,12 @@ export default function Modulos() {
     setAviso('');
     setEnviando(true);
     try {
-      await client.post('/modulos', {
+      const res = await client.post('/modulos', {
         nombre,
         gestion: gestion.trim() || null,
       });
-      setNombre('');
-      setGestion('');
-      setAviso('Módulo creado. Quedó inactivo hasta que lo actives.');
-      await cargar();
+      // Paso 2: cargar los estudiantes y las fechas de ESE módulo.
+      navegar(`/admin/modulos/${res.data.modulo.id}/datos`);
     } catch (e) {
       setError(mensajeDe(e, 'No se pudo crear el módulo'));
     } finally {
@@ -54,10 +56,7 @@ export default function Modulos() {
   }
 
   async function activar(modulo) {
-    const ok = window.confirm(
-      `¿Activar "${modulo.nombre}"? El módulo actual se desactivará y solo ` +
-        'podrán ingresar los estudiantes inscritos en el nuevo módulo.'
-    );
+    const ok = window.confirm(mensajeConfirmacion(modulo));
     if (!ok) return;
     setError('');
     setAviso('');
@@ -85,6 +84,10 @@ export default function Modulos() {
 
       <form className="tarjeta form-modulo" onSubmit={crear}>
         <h3>Nuevo módulo</h3>
+        <p className="nota">
+          Paso 1 de 3: crea el módulo (queda inactivo). Luego cargarás sus estudiantes y
+          fechas y, por último, lo activarás.
+        </p>
         <div className="fila-campos">
           <label className="campo">
             Nombre
@@ -126,6 +129,7 @@ export default function Modulos() {
                 <th>Nombre</th>
                 <th>Gestión</th>
                 <th>Inscritos</th>
+                <th>Fechas</th>
                 <th>Estado</th>
                 <th></th>
               </tr>
@@ -136,6 +140,7 @@ export default function Modulos() {
                   <td>{m.nombre}</td>
                   <td>{m.gestion || '—'}</td>
                   <td>{m.inscritos}</td>
+                  <td>{m.fechas}</td>
                   <td>
                     <span className={m.activo ? 'etiqueta activa' : 'etiqueta'}>
                       {m.activo ? 'Activo' : 'Inactivo'}
@@ -143,13 +148,22 @@ export default function Modulos() {
                   </td>
                   <td>
                     {!m.activo && (
-                      <button
-                        className="btn btn-secundario"
-                        disabled={activandoId !== null}
-                        onClick={() => activar(m)}
-                      >
-                        {activandoId === m.id ? 'Activando…' : 'Activar'}
-                      </button>
+                      <div className="acciones-modulo">
+                        {!m.activado_en && (
+                          <Link className="btn btn-secundario" to={`/admin/modulos/${m.id}/datos`}>
+                            Cargar datos
+                          </Link>
+                        )}
+                        <button
+                          className="btn btn-secundario"
+                          disabled={activandoId !== null || !puedeActivar(m)}
+                          title={puedeActivar(m) ? '' : textoFaltante(m)}
+                          onClick={() => activar(m)}
+                        >
+                          {activandoId === m.id ? 'Activando…' : 'Activar'}
+                        </button>
+                        {!puedeActivar(m) && <small className="nota">{textoFaltante(m)}</small>}
+                      </div>
                     )}
                   </td>
                 </tr>

@@ -4,6 +4,9 @@
 //   POST /api/importacion/estudiantes          (archivo) -> guarda (todo o nada)
 //   POST /api/importacion/fechas/revisar       (archivo) -> vista previa, no guarda
 //   POST /api/importacion/fechas               (archivo) -> guarda (todo o nada)
+//
+// Todos aceptan `modulo_id` (campo del formulario o query) para importar a un módulo
+// nuevo que aún no está activo (RF-13). Sin él, usan el módulo activo.
 const express = require('express');
 const multer = require('multer');
 const { getCurrentUser, requireAdmin } = require('../middleware/auth');
@@ -13,6 +16,12 @@ const importacionService = require('../services/importacionService');
 const router = express.Router();
 
 const MAX_MB = 5;
+
+// Módulo destino pedido por el cliente (undefined = el activo).
+function moduloDe(req) {
+  const valor = (req.body && req.body.modulo_id) ?? (req.query && req.query.modulo_id);
+  return valor === '' ? undefined : valor;
+}
 
 function ipDe(req) {
   return req.ip || (req.socket && req.socket.remoteAddress) || null;
@@ -53,7 +62,7 @@ router.post(
   recibirArchivo,
   async (req, res, next) => {
     try {
-      const resultado = await importacionService.revisarEstudiantes(req.file.buffer);
+      const resultado = await importacionService.revisarEstudiantes(req.file.buffer, moduloDe(req));
       res.json({ archivo: req.file.originalname, ...resultado });
     } catch (e) {
       next(e);
@@ -72,7 +81,8 @@ router.post(
         req.file.buffer,
         req.file.originalname,
         req.usuario,
-        ipDe(req)
+        ipDe(req),
+        moduloDe(req)
       );
       if (resultado.errores) {
         return res.status(400).json({
@@ -97,7 +107,7 @@ router.post(
   recibirArchivo,
   async (req, res, next) => {
     try {
-      const resultado = await importacionService.revisarFechas(req.file.buffer);
+      const resultado = await importacionService.revisarFechas(req.file.buffer, moduloDe(req));
       res.json({ archivo: req.file.originalname, ...resultado });
     } catch (e) {
       next(e);
@@ -116,7 +126,8 @@ router.post(
         req.file.buffer,
         req.file.originalname,
         req.usuario,
-        ipDe(req)
+        ipDe(req),
+        moduloDe(req)
       );
       if (resultado.errores) {
         return res.status(400).json({

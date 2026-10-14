@@ -8,6 +8,7 @@ const {
   Inscripcion,
   SesionClase,
   Importacion,
+  Modulo,
 } = require('../models');
 const { errorHttp } = require('../core/errors');
 const { leerFilas } = require('./excelService');
@@ -18,6 +19,35 @@ const {
   filaFechaSchema,
   COLUMNAS_FECHAS,
 } = require('../schemas/importacion');
+
+// Módulo al que se importa (RF-13). Con `moduloId` se usa ese módulo, que puede
+// estar inactivo (un módulo nuevo que todavía no se activa); sin él, el activo.
+// Un módulo que ya estuvo activo y fue reemplazado es historia: no se modifica (RN-08).
+// Devuelve el módulo o null si no se indicó y no hay uno activo.
+async function resolverModulo(moduloId) {
+  if (moduloId === undefined || moduloId === null || moduloId === '') {
+    const activo = await Modulo.findOne({ where: { activo: true } });
+    return activo || null;
+  }
+  const id = Number(moduloId);
+  if (!Number.isInteger(id) || id <= 0) throw errorHttp(400, 'El módulo indicado no es válido');
+  const modulo = await Modulo.findByPk(id);
+  if (!modulo) throw errorHttp(404, 'Módulo no encontrado');
+  if (!modulo.activo && modulo.activado_en) {
+    throw errorHttp(
+      409,
+      `El módulo "${modulo.nombre}" ya se usó y fue reemplazado; sus datos se conservan y no se pueden modificar`
+    );
+  }
+  return modulo;
+}
+
+function exigirModulo(modulo, que) {
+  if (!modulo) {
+    throw errorHttp(409, `No hay un módulo activo. Elige o crea un módulo antes de importar ${que}`);
+  }
+  return modulo;
+}
 
 // '2026-10-05' -> '05/10/2026' para los mensajes al usuario.
 const fechaLegible = (iso) => iso.split('-').reverse().join('/');
@@ -32,8 +62,9 @@ function validarFila(schema, fila) {
 
 // RF-11 + RF-16: revisa el Excel de estudiantes y arma la vista previa.
 // Cada fila válida trae su estado: NUEVO, EXISTENTE (ya está en el sistema)
-// o YA_INSCRITO (ya está en el módulo activo).
-async function revisarEstudiantes(buffer) {
+// o YA_INSCRITO (ya está en el módulo destino: el indicado o, si no, el activo).
+async function revisarEstudiantes(buffer, moduloId) {
+  const modulo = await resolverModulo(moduloId);
   const filas = await leerFilas(buffer, COLUMNAS_ESTUDIANTES);
   const errores = [];
   const candidatas = [];
@@ -81,11 +112,10 @@ async function revisarEstudiantes(buffer) {
   const porCodigo = new Map(existentes.filter((u) => u.codigo).map((u) => [u.codigo, u]));
   const porEmail = new Map(existentes.map((u) => [u.email.toLowerCase(), u]));
 
-  const moduloId = await actividadService.moduloActivoId();
   const inscritos = new Set();
-  if (moduloId && existentes.length) {
+  if (modulo && existentes.length) {
     const ins = await Inscripcion.findAll({
-      where: { modulo_id: moduloId, estudiante_id: existentes.map((u) => u.id) },
+      where: { modulo_id: modulo.id, estudiante_id: existentes.map((u) => u.id) },
       attributes: ['estudiante_id'],
     });
     ins.forEach((i) => inscritos.add(i.estudiante_id));
@@ -119,16 +149,14 @@ async function revisarEstudiantes(buffer) {
   return { total: filas.length, validas, errores };
 }
 
-// RF-11: guarda los estudiantes del Excel en el módulo activo.
+// RF-11: guarda los estudiantes del Excel en el módulo destino (el indicado o el activo).
 // Si el archivo tiene algún error no guarda nada y devuelve { errores }.
 // Si todo está bien devuelve { importacion, creados, inscritos, yaInscritos }.
-async function importarEstudiantes(buffer, archivo, admin, ip) {
-  const moduloId = await actividadService.moduloActivoId();
-  if (!moduloId) {
-    throw errorHttp(409, 'No hay un módulo activo. Activa un módulo antes de importar estudiantes');
-  }
+async function importarEstudiantes(buffer, archivo, admin, ip, moduloDestino) {
+  const modulo = exigirModulo(await resolverModulo(moduloDestino), 'estudiantes');
+  const moduloId = modulo.id;
 
-  const { validas, errores } = await revisarEstudiantes(buffer);
+  const { validas, errores } = await revisarEstudiantes(buffer, moduloId);
   if (errores.length > 0) return { errores };
 
   let creados = 0;
@@ -197,7 +225,8 @@ async function importarEstudiantes(buffer, archivo, admin, ip) {
 
 // RF-12 + RF-16: revisa el Excel de fechas de clase y arma la vista previa.
 // No guarda nada. Las fechas que ya existen en el módulo activo son error.
-async function revisarFechas(buffer) {
+async function revisarFechas(buffer, moduloId) {
+  const modulo = await resolverModulo(moduloId);
   const filas = await leerFilas(buffer, COLUMNAS_FECHAS);
   const errores = [];
   const candidatas = [];
@@ -222,12 +251,11 @@ async function revisarFechas(buffer) {
     candidatas.push({ fila: fila.fila, ...datos });
   }
 
-  // 3. Fechas que ya están cargadas en el módulo activo.
-  const moduloId = await actividadService.moduloActivoId();
+  // 3. Fechas que ya están cargadas en el módulo destino.
   const existentes = new Set();
-  if (moduloId && candidatas.length) {
+  if (modulo && candidatas.length) {
     const sesiones = await SesionClase.findAll({
-      where: { modulo_id: moduloId, fecha: candidatas.map((c) => c.fecha) },
+      where: { modulo_id: modulo.id, fecha: candidatas.map((c) => c.fecha) },
       attributes: ['fecha'],
     });
     sesiones.forEach((s) => existentes.add(s.fecha));
@@ -238,7 +266,7 @@ async function revisarFechas(buffer) {
     if (existentes.has(c.fecha)) {
       errores.push({
         fila: c.fila,
-        mensaje: `Ya existe una clase el ${fechaLegible(c.fecha)} en el módulo activo`,
+        mensaje: `Ya existe una clase el ${fechaLegible(c.fecha)} en ${modulo.activo ? 'el módulo activo' : 'este módulo'}`,
       });
     } else {
       validas.push(c);
@@ -250,15 +278,13 @@ async function revisarFechas(buffer) {
   return { total: filas.length, validas, errores };
 }
 
-// RF-12: guarda las fechas de clase del Excel en el módulo activo.
+// RF-12: guarda las fechas de clase del Excel en el módulo destino (el indicado o el activo).
 // Si el archivo tiene algún error no guarda nada y devuelve { errores }.
-async function importarFechas(buffer, archivo, admin, ip) {
-  const moduloId = await actividadService.moduloActivoId();
-  if (!moduloId) {
-    throw errorHttp(409, 'No hay un módulo activo. Activa un módulo antes de importar fechas');
-  }
+async function importarFechas(buffer, archivo, admin, ip, moduloDestino) {
+  const modulo = exigirModulo(await resolverModulo(moduloDestino), 'fechas');
+  const moduloId = modulo.id;
 
-  const { validas, errores } = await revisarFechas(buffer);
+  const { validas, errores } = await revisarFechas(buffer, moduloId);
   if (errores.length > 0) return { errores };
 
   let importacion;

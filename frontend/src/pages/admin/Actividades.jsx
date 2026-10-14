@@ -21,8 +21,11 @@ const ACCIONES = {
   EXPORTAR: 'Exportó asistencias',
 };
 
-// Filtro de acciones: sin duplicados de nombre (CORREGIR_ASISTENCIA es un alias).
-const ACCIONES_FILTRO = Object.keys(ACCIONES).filter((a) => a !== 'CORREGIR_ASISTENCIA');
+// Acciones que se ofrecen en el filtro. Se omiten CORREGIR_ASISTENCIA (alias) y
+// GENERAR_FALTAS (ya no se genera): los registros antiguos se siguen mostrando con su nombre.
+const ACCIONES_FILTRO = Object.keys(ACCIONES).filter(
+  (a) => a !== 'CORREGIR_ASISTENCIA' && a !== 'GENERAR_FALTAS'
+);
 
 const ENTIDADES = {
   asistencia: 'Asistencia',

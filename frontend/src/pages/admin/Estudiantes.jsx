@@ -17,7 +17,7 @@ const ESTADOS = {
 };
 
 // Configuración de cada tipo de importación (RF-11 y RF-12).
-const ESTUDIANTES = {
+export const ESTUDIANTES = {
   titulo: 'Importar estudiantes',
   ruta: '/importacion/estudiantes',
   columnasExcel: 'Número de registro · Nombre completo · Correo electrónico',
@@ -31,7 +31,7 @@ const ESTUDIANTES = {
   ],
 };
 
-const FECHAS = {
+export const FECHAS = {
   titulo: 'Importar fechas de clase',
   ruta: '/importacion/fechas',
   columnasExcel: 'Fecha (DD/MM/AAAA) · Hora inicio · Hora fin',
@@ -41,7 +41,8 @@ const FECHAS = {
 
 // Bloque de importación: elegir archivo -> Revisar (vista previa, RF-16)
 // -> Confirmar carga. Si el archivo tiene errores se listan y no se guarda nada.
-function ImportarExcel({ config, hayModulo, onImportado }) {
+// `moduloId` importa a ese módulo (p. ej. uno nuevo aún inactivo); sin él, al módulo activo.
+export function ImportarExcel({ config, hayModulo, moduloId, onImportado }) {
   const [archivo, setArchivo] = useState(null);
   const [inputKey, setInputKey] = useState(0); // para limpiar el <input type="file">
   const [revision, setRevision] = useState(null);
@@ -52,6 +53,7 @@ function ImportarExcel({ config, hayModulo, onImportado }) {
 
   function enviar(url) {
     const datos = new FormData();
+    if (moduloId) datos.append('modulo_id', String(moduloId));
     datos.append('archivo', archivo);
     return client.post(url, datos);
   }

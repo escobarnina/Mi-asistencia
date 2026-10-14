@@ -3,7 +3,14 @@ process.env.NODE_ENV = 'test';
 
 const request = require('supertest');
 const app = require('../src/server');
-const { sequelize, Usuario, Modulo, Inscripcion, Actividad } = require('../src/models');
+const {
+  sequelize,
+  Usuario,
+  Modulo,
+  Inscripcion,
+  SesionClase,
+  Actividad,
+} = require('../src/models');
 const { hashPassword } = require('../src/core/security');
 
 let tokenAdmin;
@@ -148,9 +155,40 @@ describe('Editar', () => {
 });
 
 describe('Activar', () => {
+  test('un módulo sin estudiantes ni fechas no se puede activar (400)', async () => {
+    const lista = await request(app).get('/api/modulos').set(auth(tokenAdmin));
+    const otro = lista.body.modulos.find((m) => !m.activo);
+    expect(Number(otro.inscritos)).toBe(0);
+    expect(Number(otro.fechas)).toBe(0);
+
+    const res = await request(app)
+      .post(`/api/modulos/${otro.id}/activar`)
+      .set(auth(tokenAdmin));
+
+    expect(res.status).toBe(400);
+    expect(res.body.detalle).toMatch(/estudiantes inscritos ni fechas de clase/);
+    expect((await Modulo.findByPk(moduloInicial.id)).activo).toBe(true);
+    expect(await Actividad.count({ where: { accion: 'ACTIVAR_MODULO' } })).toBe(0);
+  });
+
   test('activar otro módulo desactiva el anterior y deja historial', async () => {
     const lista = await request(app).get('/api/modulos').set(auth(tokenAdmin));
     const otro = lista.body.modulos.find((m) => !m.activo);
+    // RF-13: el módulo nuevo ya tiene su estudiante y su fecha de clase.
+    const nuevo = await Usuario.create({
+      codigo: '990002',
+      nombre: 'Estudiante Nuevo',
+      email: 'dos@test.com',
+      rol: 'ESTUDIANTE',
+      activo: true,
+    });
+    await Inscripcion.create({ modulo_id: otro.id, estudiante_id: nuevo.id });
+    await SesionClase.create({
+      modulo_id: otro.id,
+      fecha: '2026-10-05',
+      hora_inicio: '18:00',
+      hora_fin: '21:00',
+    });
 
     const res = await request(app)
       .post(`/api/modulos/${otro.id}/activar`)
@@ -170,6 +208,7 @@ describe('Activar', () => {
     });
     expect(registro).not.toBeNull();
     expect(registro.modulo_id).toBe(otro.id);
+    expect(registro.detalle).toContain('1 estudiantes, 1 fechas');
   });
 
   test('activar el que ya está activo no duplica el historial', async () => {
