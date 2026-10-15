@@ -5,7 +5,7 @@
 //   POST /api/importacion/fechas/revisar       (archivo) -> vista previa, no guarda
 //   POST /api/importacion/fechas               (archivo) -> guarda (todo o nada)
 //
-// Todos aceptan `modulo_id` (campo del formulario o query) para importar a un módulo
+// Todos aceptan `modo` (AGREGAR por defecto, o REEMPLAZAR si el módulo no tiene asistencias) y `modulo_id` (campo del formulario o query) para importar a un módulo
 // nuevo que aún no está activo (RF-13). Sin él, usan el módulo activo.
 const express = require('express');
 const multer = require('multer');
@@ -21,6 +21,11 @@ const MAX_MB = 5;
 function moduloDe(req) {
   const valor = (req.body && req.body.modulo_id) ?? (req.query && req.query.modulo_id);
   return valor === '' ? undefined : valor;
+}
+
+// Modo pedido por el cliente: AGREGAR (por defecto) o REEMPLAZAR.
+function modoDe(req) {
+  return (req.body && req.body.modo) ?? (req.query && req.query.modo);
 }
 
 function ipDe(req) {
@@ -62,7 +67,7 @@ router.post(
   recibirArchivo,
   async (req, res, next) => {
     try {
-      const resultado = await importacionService.revisarEstudiantes(req.file.buffer, moduloDe(req));
+      const resultado = await importacionService.revisarEstudiantes(req.file.buffer, moduloDe(req), modoDe(req));
       res.json({ archivo: req.file.originalname, ...resultado });
     } catch (e) {
       next(e);
@@ -82,7 +87,8 @@ router.post(
         req.file.originalname,
         req.usuario,
         ipDe(req),
-        moduloDe(req)
+        moduloDe(req),
+        modoDe(req)
       );
       if (resultado.errores) {
         return res.status(400).json({
@@ -107,7 +113,7 @@ router.post(
   recibirArchivo,
   async (req, res, next) => {
     try {
-      const resultado = await importacionService.revisarFechas(req.file.buffer, moduloDe(req));
+      const resultado = await importacionService.revisarFechas(req.file.buffer, moduloDe(req), modoDe(req));
       res.json({ archivo: req.file.originalname, ...resultado });
     } catch (e) {
       next(e);
@@ -127,7 +133,8 @@ router.post(
         req.file.originalname,
         req.usuario,
         ipDe(req),
-        moduloDe(req)
+        moduloDe(req),
+        modoDe(req)
       );
       if (resultado.errores) {
         return res.status(400).json({

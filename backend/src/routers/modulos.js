@@ -30,6 +30,18 @@ function idDe(req) {
   return id;
 }
 
+// GET /api/modulos/activo/resumen (PÚBLICO) -> { nombre, gestion } o 204 si no hay módulo activo.
+// Lo usa la pantalla de login; no expone ningún otro dato.
+router.get('/activo/resumen', async (req, res, next) => {
+  try {
+    const modulo = await moduloService.obtenerActivo();
+    if (!modulo) return res.status(204).end();
+    res.json({ nombre: modulo.nombre, gestion: modulo.gestion });
+  } catch (e) {
+    next(e);
+  }
+});
+
 // GET /api/modulos/activo -> { modulo } (null si no hay ninguno activo).
 // Va antes de /:id para que "activo" no se interprete como un id.
 router.get('/activo', getCurrentUser, async (req, res, next) => {
@@ -70,7 +82,7 @@ router.patch('/:id', getCurrentUser, requireAdmin, async (req, res, next) => {
   try {
     const id = idDe(req);
     const datos = validar(editarModuloSchema, req.body);
-    res.json({ modulo: await moduloService.editar(id, datos) });
+    res.json({ modulo: await moduloService.editar(id, datos, req.usuario, ipDe(req)) });
   } catch (e) {
     next(e);
   }

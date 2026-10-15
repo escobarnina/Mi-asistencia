@@ -27,7 +27,14 @@ module.exports = (sequelize, DataTypes) =>
           'IMPORTAR_ESTUDIANTES',
           'IMPORTAR_FECHAS',
           'ACTIVAR_MODULO',
-          'EXPORTAR'
+          'EXPORTAR',
+          'AGREGAR_ESTUDIANTE',
+          'EDITAR_ESTUDIANTE',
+          'QUITAR_ESTUDIANTE',
+          'AGREGAR_FECHA',
+          'EDITAR_FECHA',
+          'QUITAR_FECHA',
+          'EDITAR_MODULO'
         ),
         allowNull: false,
       },

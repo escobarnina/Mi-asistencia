@@ -7,6 +7,7 @@ const env = require('./config/env');
 // Router de autenticación (login/logout/me) + stubs que deja listos el equipo.
 const authRouter = require('./routers/auth');
 const modulosRouter = require('./routers/modulos');
+const gestionModuloRouter = require('./routers/gestionModulo');
 const importacionRouter = require('./routers/importacion');
 const asistenciaRouter = require('./routers/asistencia');
 const adminRouter = require('./routers/admin');
@@ -28,6 +29,7 @@ app.get('/api/health', (req, res) => {
 // Routers de la aplicación (todos bajo /api).
 app.use('/api/auth', authRouter);
 app.use('/api/modulos', modulosRouter);
+app.use('/api/modulos', gestionModuloRouter);
 app.use('/api/importacion', importacionRouter);
 app.use('/api/asistencia', asistenciaRouter);
 app.use('/api/admin', adminRouter);
@@ -47,7 +49,7 @@ app.use((err, req, res, next) => {
   if (status === 500) {
     console.error(err);
   }
-  res.status(status).json({ detalle });
+  res.status(status).json({ detalle, ...(status !== 500 ? err.extra : undefined) });
 });
 
 // Solo levanta el servidor si se ejecuta directamente (no al importarlo en tests).
