@@ -1,5 +1,6 @@
 import { useEffect, useId } from 'react';
 import { Inbox, FileSpreadsheet, UploadCloud } from 'lucide-react';
+import { ACCIONES } from '../../constants/acciones';
 import { iniciales } from '../../utils/format';
 
 export function Card({ title, actions, className = '', children }) {
@@ -54,24 +55,14 @@ export function StatusBadge({ estado }) {
   return <span className={`badge ${clase}`}>{texto}</span>;
 }
 
-function tipoAccion(accion = '') {
-  if (accion.startsWith('MARCAR')) return 'tag-ok';
-  if (accion.startsWith('MODIFICAR') || accion.startsWith('CORREGIR')) return 'tag-warn';
-  if (accion.startsWith('IMPORTAR') || accion.startsWith('ACTIVAR')) return 'tag-info';
-  if (accion.startsWith('EXPORTAR')) return 'tag-violet';
-  return '';
-}
-
-const ETIQUETA_ACCION = {
-  MARCAR_ASISTENCIA: 'MARCAR',
-  MODIFICAR_ASISTENCIA: 'CORREGIR',
-  IMPORTAR_ESTUDIANTES: 'IMPORTAR',
-  IMPORTAR_FECHAS: 'IMPORTAR',
-  ACTIVAR_MODULO: 'ACTIVAR',
-};
-
 export function ActionTag({ accion }) {
-  return <span className={`tag ${tipoAccion(accion)}`}>{ETIQUETA_ACCION[accion] || accion}</span>;
+  const def = ACCIONES[accion];
+  const clase = def?.tipo ? ` tag-${def.tipo}` : '';
+  return (
+    <span className={`tag${clase}`} title={accion}>
+      {def ? def.texto : accion}
+    </span>
+  );
 }
 
 export function StatCard({ icon: Icon, tono = '', label, value, sub, valueTone = '' }) {

@@ -3,20 +3,8 @@ import { Calendar, History, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import client from '../../api/client';
 import { ActionTag, Button, Card, DataTable, EmptyState, Paginacion, Persona, Skeleton } from '../../components/ui';
+import { ACCIONES_FILTRO, textoAccion } from '../../constants/acciones';
 import { fechaHoraLegible, mensajeDe, usePageTitle } from '../../utils/format';
-
-// Acciones que se ofrecen en el filtro (códigos que guarda el sistema).
-const ACCIONES_FILTRO = [
-  ['LOGIN', 'Inicio de sesión'],
-  ['LOGOUT', 'Cierre de sesión'],
-  ['LOGIN_FALLIDO', 'Intento de ingreso fallido'],
-  ['MARCAR_ASISTENCIA', 'Marcó su asistencia'],
-  ['MODIFICAR_ASISTENCIA', 'Corrigió una asistencia'],
-  ['IMPORTAR_ESTUDIANTES', 'Importó estudiantes'],
-  ['IMPORTAR_FECHAS', 'Importó fechas de clase'],
-  ['ACTIVAR_MODULO', 'Activó un módulo'],
-  ['EXPORTAR', 'Exportó asistencias'],
-];
 
 const LIMITE = 20;
 const SIN_FILTROS = { estudiante: '', desde: '', hasta: '', accion: '' };
@@ -104,9 +92,9 @@ export default function Actividades() {
             onChange={(e) => cambiar('accion', e.target.value)}
           >
             <option value="">Todas las acciones</option>
-            {ACCIONES_FILTRO.map(([codigo, nombre]) => (
+            {ACCIONES_FILTRO.map((codigo) => (
               <option key={codigo} value={codigo}>
-                {nombre}
+                {textoAccion(codigo)}
               </option>
             ))}
           </select>

@@ -29,7 +29,7 @@
 .badge-proxima { color: var(--next); background: var(--next-bg); }
 .badge-activo { color: var(--ok); background: var(--ok-bg); }
 .badge-inactivo { color: var(--next); background: var(--next-bg); }
-.tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--next-bg); color: var(--next); }
+.tag { display: inline-block; white-space: nowrap; padding: 2px 8px; border-radius: 6px; font-family: var(--mono); font-size: 12px; font-weight: 700; background: var(--next-bg); color: var(--next); }
 .tag-ok { background: var(--ok-bg); color: var(--ok); }
 .tag-warn { background: var(--warn-bg); color: var(--warn); }
 .tag-info { background: var(--primary-50); color: var(--primary-700); }
