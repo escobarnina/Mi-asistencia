@@ -135,15 +135,17 @@ export default function InicioEstudiante() {
     }
     return (
       <Card title="Clase de hoy" className="clase-hoy">
-        <EmptyState
-          icon={CalendarDays}
-          title="Hoy no hay clase"
-          text={
-            proxima
-              ? `Tu próxima clase es el ${diaNombre(proxima.fecha)}, ${horaLegible(proxima.hora_inicio)}`
-              : 'No hay más clases programadas en este módulo.'
-          }
-        />
+        <div className="clase-hoy-cuerpo">
+          {/* RF-03: fuera de la fecha de clase el botón se ve, pero deshabilitado. */}
+          <Button size="lg" icon={Check} disabled>
+            Marcar asistencia
+          </Button>
+          <p className="texto-muted" role="status">
+            {proxima
+              ? `Hoy no hay clase. Tu próxima clase es el ${diaNombre(proxima.fecha)}`
+              : 'Hoy no hay clase. No hay más clases programadas en este módulo.'}
+          </p>
+        </div>
       </Card>
     );
   }

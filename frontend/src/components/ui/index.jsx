@@ -33,7 +33,7 @@ export function Button({
     .filter(Boolean)
     .join(' ');
   return (
-    <button type={type} className={clases} disabled={disabled || loading} {...resto}>
+    <button type={type} className={clases} disabled={disabled || loading} aria-disabled={disabled || loading || undefined} {...resto}>
       {loading ? <span className="spinner" aria-hidden="true" /> : Icon && <Icon size={18} aria-hidden="true" />}
       {children}
     </button>
