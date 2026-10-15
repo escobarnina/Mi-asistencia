@@ -230,6 +230,15 @@ npm install
 DB_HOST=localhost npm test          # PowerShell: $env:DB_HOST='localhost'; npm test
 ```
 
+También se pueden correr dentro del contenedor. La imagen de producción no incluye `tests/`
+(está en `backend/.dockerignore`), así que se monta la carpeta al ejecutar (99/99 en verde):
+
+```bash
+# Desde la raíz del repo. En Git Bash de Windows, MSYS_NO_PATHCONV evita que cambie la ruta.
+MSYS_NO_PATHCONV=1 docker compose run --rm -v "$(pwd -W)/backend/tests:/app/tests" --entrypoint "" backend npm test
+# Linux/macOS: docker compose run --rm -v ./backend/tests:/app/tests --entrypoint "" backend npm test
+```
+
 ---
 
 ## API

@@ -1,0 +1,29 @@
+:root {
+  --bg: #F4F6FA; --card: #FFFFFF; --line: #E4E8F0;
+  --text: #0F172A; --muted: #64748B; --soft: #94A3B8;
+  --primary: #2557D6; --primary-50: #EAF0FD; --primary-700: #1B44AE;
+  --nav: #0E1A33; --nav-2: #16264A; --nav-text: #AEB9D0;
+  --ok: #15803D; --ok-bg: #E7F6EC;     /* Presente */
+  --bad: #B91C1C; --bad-bg: #FDECEC;    /* Falta */
+  --warn: #B45309; --warn-bg: #FEF3E2;  /* Pendiente */
+  --next: #475569; --next-bg: #EEF1F5;  /* Próxima */
+  --violet: #6D28D9; --violet-bg: #F0EAFE;
+  --radius: 12px; --radius-sm: 9px;
+  --shadow: 0 1px 2px rgba(15,23,42,.04), 0 4px 16px rgba(15,23,42,.04);
+  --font: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: var(--font); font-size: 14px; line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, p { margin: 0; }
+button, input, select { font: inherit; color: inherit; }
+a { color: var(--primary); }
+
+:focus-visible { outline: 3px solid var(--primary-50); outline-offset: 0; box-shadow: 0 0 0 1px var(--primary); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
