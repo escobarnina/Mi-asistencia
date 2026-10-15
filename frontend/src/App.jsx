@@ -6,6 +6,7 @@ import AdminLayout from './layouts/AdminLayout';
 import StudentLayout from './layouts/StudentLayout';
 import Login from './pages/Login';
 import InicioEstudiante from './pages/estudiante/Inicio';
+import Calendario from './pages/estudiante/Calendario';
 import InicioAdmin from './pages/admin/Inicio';
 import Modulos from './pages/admin/Modulos';
 import ModuloGestion, { RedirigirDatos } from './pages/admin/ModuloGestion';
@@ -29,6 +30,7 @@ export default function App() {
             }
           >
             <Route path="/estudiante" element={<InicioEstudiante />} />
+            <Route path="/estudiante/calendario" element={<Calendario />} />
           </Route>
 
           <Route

@@ -1,7 +1,7 @@
 // Lógica de asistencia del estudiante (RF-03, RF-04, RF-05).
 // Regla clave: solo se marca el DÍA de la clase (todo el día, sin tolerancias),
 // una sola vez por estudiante y fecha de clase. "Hoy" es la fecha de La Paz.
-const { Modulo, Inscripcion, SesionClase, Asistencia } = require('../models');
+const { Modulo, Inscripcion, SesionClase, Asistencia, AsistenciaCambio } = require('../models');
 const { errorHttp } = require('../core/errors');
 const actividadService = require('./actividadService');
 const { hoyLaPaz, estadoDeFecha, totalizar } = require('./estadoAsistencia');
@@ -125,6 +125,15 @@ async function historial(estudiante) {
     where: { estudiante_id: estudiante.id, sesion_id: sesiones.map((s) => s.id) },
   });
   const porSesion = new Map(asistencias.map((a) => [a.sesion_id, a]));
+  // Una asistencia está corregida si el admin dejó algún cambio auditado (RN-07).
+  const cambios = asistencias.length
+    ? await AsistenciaCambio.findAll({
+        where: { asistencia_id: asistencias.map((a) => a.id) },
+        attributes: ['asistencia_id'],
+        group: ['asistencia_id'],
+      })
+    : [];
+  const corregidas = new Set(cambios.map((c) => c.asistencia_id));
 
   const fechas = sesiones.map((s) => {
     const a = porSesion.get(s.id);
@@ -133,6 +142,7 @@ async function historial(estudiante) {
       ...sesionPublica(s),
       estado,
       hora_registro: a ? a.hora_registro : null,
+      corregida: a ? corregidas.has(a.id) : false,
     };
   });
 

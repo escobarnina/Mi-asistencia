@@ -220,8 +220,8 @@ alcance, como indica el documento de requisitos.
 ## Pruebas automáticas
 
 Los tests (Jest + supertest) usan una base aparte, `asistencia_test`, en el **mismo MySQL** (se
-crea sola). Hay 8 suites: autenticación, módulos, activación de un módulo nuevo, importación,
-asistencia del estudiante, panel admin, actividades y gestión editable de módulos (8 suites, 127 pruebas).
+crea sola). Hay 9 suites: autenticación, módulos, activación de un módulo nuevo, importación,
+asistencia del estudiante, panel admin, actividades y gestión editable de módulos (9 suites, 131 pruebas).
 
 ```bash
 # Con la base levantada (docker compose up -d db). Desde tu máquina el host es localhost:
