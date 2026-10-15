@@ -3,7 +3,7 @@ import { fechaLegible, horaLegible, nombreDia, porcentaje } from './format';
 
 const TZ = 'America/La_Paz';
 
-const TEXTO_ESTADO = { PRESENTE: 'Presente', FALTA: 'Falta', PENDIENTE: 'Pendiente', PROXIMA: 'Proxima' };
+const TEXTO_ESTADO = { PRESENTE: 'Presente', FALTA: 'Falta', PENDIENTE: 'Pendiente', PROXIMA: 'Próxima' };
 // Mismos colores de estado que el resto del sistema (theme.css).
 const COLOR_ESTADO = {
   PRESENTE: [21, 128, 61],
@@ -34,12 +34,12 @@ export async function exportarPdfAsistencia({ usuario, historial }) {
   doc.setTextColor(71, 85, 105);
   doc.text(`Estudiante: ${usuario.nombre}`, 40, 72);
   doc.text(`Registro: ${usuario.codigo || '-'}`, 40, 86);
-  doc.text(`Modulo: ${modulo.nombre}${modulo.gestion ? ` (${modulo.gestion})` : ''}`, 40, 100);
+  doc.text(`Módulo: ${modulo.nombre}${modulo.gestion ? ` (${modulo.gestion})` : ''}`, 40, 100);
   doc.text(`Generado: ${formatInTimeZone(new Date(), TZ, 'dd/MM/yyyy HH:mm')}`, 40, 114);
 
   autoTable(doc, {
     startY: 130,
-    head: [['Fecha', 'Dia', 'Horario', 'Estado', 'Hora de marca']],
+    head: [['Fecha', 'Día', 'Horario', 'Estado', 'Hora de marca']],
     body: fechas.map((f) => [
       fechaLegible(f.fecha),
       nombreDia(f.fecha),

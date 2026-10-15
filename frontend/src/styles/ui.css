@@ -348,3 +348,8 @@
   .cal-dia.hoy .cal-num { color: var(--primary); }
   .cal-pop { width: 220px; }
 }
+.cal-dia { padding: 6px 7px; }
+.cal-dia.hoy { padding: 5px 6px; }
+.cal-estado { max-width: 100%; }
+.cal-estado .badge { font-size: 10.5px; padding: 2px 6px; gap: 4px; white-space: nowrap; }
+@media (max-width: 700px) { .cal-dia, .cal-dia.sin-clase { padding: 6px; } }
