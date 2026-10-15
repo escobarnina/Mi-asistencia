@@ -220,8 +220,8 @@ alcance, como indica el documento de requisitos.
 ## Pruebas automáticas
 
 Los tests (Jest + supertest) usan una base aparte, `asistencia_test`, en el **mismo MySQL** (se
-crea sola). Hay 7 suites: autenticación, módulos, activación de un módulo nuevo, importación,
-asistencia del estudiante, panel admin y actividades.
+crea sola). Hay 8 suites: autenticación, módulos, activación de un módulo nuevo, importación,
+asistencia del estudiante, panel admin, actividades y gestión editable de módulos (8 suites, 127 pruebas).
 
 ```bash
 # Con la base levantada (docker compose up -d db). Desde tu máquina el host es localhost:
@@ -250,8 +250,11 @@ Todas las rutas cuelgan de `/api`. Salvo `health` y `login`, requieren el token
 |---|---|---|
 | Salud | `GET /health` | público |
 | Auth | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | todos |
-| Módulos | `GET /modulos`, `GET /modulos/activo`, `GET /modulos/:id`, `POST /modulos`, `PATCH /modulos/:id`, `POST /modulos/:id/activar` | admin (`/modulos/activo` también estudiante) |
-| Importación | `POST /importacion/estudiantes[/revisar]`, `POST /importacion/fechas[/revisar]` (archivo `.xlsx` en el campo `archivo`, máx. 5 MB; `modulo_id` opcional) | admin |
+| Módulos | `GET /modulos`, `GET /modulos/activo`, `GET /modulos/:id`, `POST /modulos`, `PATCH /modulos/:id` (gestión con formato `N-AAAA`), `POST /modulos/:id/activar` | admin (`/modulos/activo` también estudiante) |
+| Módulo activo (login) | `GET /modulos/activo/resumen` → `{ nombre, gestion }` o `204` | público |
+| Gestión de estudiantes | `GET/POST /modulos/:id/estudiantes`, `PUT/DELETE /modulos/:id/estudiantes/:estudianteId` (`?forzar=true` si tiene asistencias) | admin |
+| Gestión de fechas | `GET/POST /modulos/:id/sesiones` (con `repetir_semanal_hasta`), `PUT/DELETE /modulos/:id/sesiones/:sesionId` | admin |
+| Importación | `POST /importacion/estudiantes[/revisar]`, `POST /importacion/fechas[/revisar]` (archivo `.xlsx` en el campo `archivo`, máx. 5 MB; `modulo_id` y `modo` = `AGREGAR` (por defecto) o `REEMPLAZAR` opcionales) | admin |
 | Asistencia (estudiante) | `GET /asistencia/hoy`, `POST /asistencia/marcar`, `GET /asistencia/mis-asistencias` | estudiante |
 | Panel admin | `GET /admin/estudiantes?q=`, `GET /admin/asistencias?fecha=&estudiante=`, `GET /admin/asistencias/exportar`, `PUT /admin/asistencias/:sesionId/:estudianteId` | admin |
 | Actividades | `GET /actividades?estudiante=&fecha=&desde=&hasta=&accion=&pagina=&limite=` | admin |
@@ -291,8 +294,8 @@ aplicar cambios de esquema, usar contraseña fuerte y restringir el acceso a MyS
 │   ├── src/
 │   │   ├── server.js · config/ · database.js
 │   │   ├── models/         (9 tablas + asociaciones)
-│   │   ├── migrations/     (1ª migración = todas las tablas)
-│   │   ├── routers/        auth · modulos · importacion · asistencia · admin · actividades
+│   │   ├── migrations/     (1ª migración = todas las tablas; 2ª = gestión editable de módulos)
+│   │   ├── routers/        auth · modulos · gestionModulo · importacion · asistencia · admin · actividades
 │   │   ├── services/       lógica de negocio (estadoAsistencia.js = regla de Falta)
 │   │   ├── schemas/ · core/ · middleware/
 │   │   └── seed.js
