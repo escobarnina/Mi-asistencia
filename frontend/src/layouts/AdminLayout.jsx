@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Home, Users, ClipboardCheck, Layers, History, LogOut, Menu } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -15,7 +15,7 @@ const ENLACES = [
 ];
 
 function tituloDe(pathname) {
-  if (pathname.startsWith('/admin/modulos/')) return 'Datos del módulo';
+  if (pathname.startsWith('/admin/modulos/')) return 'Gestionar módulo';
   if (pathname === '/admin/actividades') return 'Historial de actividad';
   const enlace = ENLACES.find((e) => (e.end ? pathname === e.to : pathname.startsWith(e.to)));
   return enlace ? (enlace.to === '/admin' ? 'Panel del administrador' : enlace.texto) : '';
@@ -37,14 +37,19 @@ export default function AdminLayout() {
   const titulo = tituloDe(pathname);
   usePageTitle(titulo);
 
-  // Se vuelve a consultar al cambiar de pantalla para reflejar una activación.
-  useEffect(() => {
+  // Se vuelve a consultar al cambiar de pantalla y cuando una pantalla lo pide
+  // (p. ej. tras activar o renombrar un módulo) para que la cápsula esté al día.
+  const refrescarModulo = useCallback(() => {
     client
       .get('/modulos/activo')
       .then((res) => setModulo(res.data.modulo))
       .catch(() => setModulo(null));
+  }, []);
+
+  useEffect(() => {
+    refrescarModulo();
     setMenu(false);
-  }, [pathname]);
+  }, [pathname, refrescarModulo]);
 
   async function cerrarSesion() {
     await logout();
@@ -83,7 +88,9 @@ export default function AdminLayout() {
             </button>
             <div>
               <div className="crumb">
-                {[RF[pathname], modulo?.nombre].filter(Boolean).join(' · ') || 'MiAsistencia'}
+                {pathname.startsWith('/admin/modulos/')
+                  ? 'Módulos / Gestionar módulo'
+                  : [RF[pathname], modulo?.nombre].filter(Boolean).join(' · ') || 'MiAsistencia'}
               </div>
               <h1>{titulo}</h1>
             </div>
@@ -99,7 +106,7 @@ export default function AdminLayout() {
           )}
         </header>
         <main className="contenido">
-          <Outlet context={{ modulo }} />
+          <Outlet context={{ modulo, refrescarModulo }} />
         </main>
       </div>
     </div>

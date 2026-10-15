@@ -87,3 +87,35 @@ export function porcentaje(presentes, faltas) {
   const base = presentes + faltas;
   return base === 0 ? null : Math.round((presentes / base) * 100);
 }
+
+// 'YYYY-MM-DD' de un instante, en La Paz.
+export const fechaIsoLaPaz = (iso) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(
+    new Date(iso)
+  );
+
+// 'hoy' o dd/mm de un instante.
+export function hoyODiaMes(iso) {
+  const f = fechaIsoLaPaz(iso);
+  return f === hoyLaPaz() ? 'hoy' : diaMes(f);
+}
+
+// 'Jueves' de '2026-10-15'.
+export function nombreDia(iso) {
+  const { dia } = partes(iso);
+  return mayus(DIAS[dia]);
+}
+
+// '2026-10' de '2026-10-15' y su etiqueta 'Octubre 2026'.
+export const claveMes = (iso) => iso.slice(0, 7);
+export function etiquetaMes(clave) {
+  const [a, m] = clave.split('-').map(Number);
+  return `${mayus(MESES[m - 1])} ${a}`;
+}
+
+// Cuántas fechas semanales hay de `desde` a `hasta` (ambas incluidas).
+export function cuentaSemanal(desde, hasta) {
+  if (!desde || !hasta || hasta < desde) return 0;
+  const dias = (new Date(`${hasta}T00:00:00Z`) - new Date(`${desde}T00:00:00Z`)) / 86400000;
+  return Math.floor(dias / 7) + 1;
+}

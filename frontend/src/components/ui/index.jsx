@@ -47,6 +47,11 @@ const ESTADOS = {
   PROXIMA: ['Próxima', 'badge-proxima'],
   ACTIVO: ['Activo', 'badge-activo'],
   INACTIVO: ['Inactivo', 'badge-inactivo'],
+  ARCHIVADO: ['Archivado', 'badge-inactivo'],
+  // Estado de una fecha de clase.
+  FECHA_DICTADA: ['Dictada', 'badge-proxima'],
+  FECHA_HOY: ['Hoy', 'badge-pendiente'],
+  FECHA_PROXIMA: ['Próxima', 'badge-info'],
 };
 
 // Única forma de mostrar un estado en todo el sistema.
@@ -143,7 +148,7 @@ export function FileDropzone({ archivo, onChange, accept = '.xlsx', inputKey }) 
   );
 }
 
-export function Modal({ open = true, icon: Icon, title, text, onClose, buttons, children }) {
+export function Modal({ open = true, icon: Icon, title, text, onClose, buttons, children, size }) {
   useEffect(() => {
     if (!open) return undefined;
     const alTeclear = (e) => e.key === 'Escape' && onClose?.();
@@ -154,7 +159,7 @@ export function Modal({ open = true, icon: Icon, title, text, onClose, buttons, 
   if (!open) return null;
   return (
     <div className="modal-fondo" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
+      <div className={`modal${size === 'lg' ? ' modal-lg' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
         {Icon && (
           <div className="modal-icono">
             <Icon size={22} aria-hidden="true" />
@@ -167,6 +172,13 @@ export function Modal({ open = true, icon: Icon, title, text, onClose, buttons, 
       </div>
     </div>
   );
+}
+
+// Resultado de una fila revisada en una importación.
+export function ResultadoBadge({ resultado }) {
+  if (resultado === 'NUEVO') return <span className="badge badge-activo">Nuevo</span>;
+  if (resultado === 'YA_INSCRITO') return <span className="badge badge-inactivo">Ya inscrito</span>;
+  return <span className="badge badge-falta">Error</span>;
 }
 
 export function EmptyState({ icon: Icon = Inbox, title, text }) {
