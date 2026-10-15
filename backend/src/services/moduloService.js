@@ -67,15 +67,30 @@ async function crear({ nombre, gestion }, usuario) {
   return obtener(modulo.id);
 }
 
-async function editar(id, datos) {
+async function editar(id, datos, usuario = null, ip = null) {
   const modulo = await Modulo.findByPk(id);
   if (!modulo) throw errorHttp(404, 'Módulo no encontrado');
+  // Un módulo reemplazado es historia (RN-08): no se renombra.
+  if (!modulo.activo && modulo.activado_en) {
+    throw errorHttp(409, `El módulo "${modulo.nombre}" ya se usó y fue reemplazado; no se puede modificar`);
+  }
 
   const nombre = datos.nombre !== undefined ? datos.nombre : modulo.nombre;
   const gestion = datos.gestion !== undefined ? datos.gestion : modulo.gestion;
   await verificarDuplicado(nombre, gestion, modulo.id);
 
+  const antes = `${modulo.nombre}${modulo.gestion ? ` (${modulo.gestion})` : ''}`;
+  const despues = `${nombre}${gestion ? ` (${gestion})` : ''}`;
   await modulo.update({ nombre, gestion: gestion || null });
+  if (usuario && antes !== despues) {
+    await actividadService.registrar(usuario.id, 'EDITAR_MODULO', {
+      entidad: 'modulo',
+      entidadId: modulo.id,
+      detalle: `${antes} → ${despues}`,
+      ip,
+      moduloId: modulo.id,
+    });
+  }
   return obtener(modulo.id);
 }
 

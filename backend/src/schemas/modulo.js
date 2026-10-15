@@ -12,6 +12,7 @@ const gestion = z
   .string()
   .trim()
   .max(10, 'La gestión no puede superar los 10 caracteres')
+  .regex(/^[0-9]-[0-9]{4}$/, 'La gestión debe tener el formato N-AAAA (por ejemplo, 1-2027)')
   .nullable()
   .optional();
 
