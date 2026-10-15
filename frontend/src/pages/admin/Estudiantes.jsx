@@ -1,19 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Search, Users } from 'lucide-react';
+import toast from 'react-hot-toast';
 import client from '../../api/client';
-
-function mensajeDe(error, porDefecto) {
-  return error.response?.data?.detalle || porDefecto;
-}
-
-// '2026-10-05' -> '05/10/2026'; '18:00:00' -> '18:00'
-const fechaLegible = (iso) => iso.split('-').reverse().join('/');
-const horaLegible = (h) => h.slice(0, 5);
+import { Button, Card, DataTable, EmptyState, FileDropzone, Persona, Skeleton } from '../../components/ui';
+import { fechaLegible, horaLegible, mensajeDe, usePageTitle } from '../../utils/format';
 
 const ESTADOS = {
-  NUEVO: { texto: 'Nuevo', clase: 'etiqueta activa' },
-  EXISTENTE: { texto: 'Ya registrado', clase: 'etiqueta' },
-  YA_INSCRITO: { texto: 'Ya inscrito', clase: 'etiqueta' },
+  NUEVO: { texto: 'Nuevo', clase: 'tag tag-ok' },
+  EXISTENTE: { texto: 'Ya registrado', clase: 'tag' },
+  YA_INSCRITO: { texto: 'Ya inscrito', clase: 'tag' },
 };
 
 // Configuración de cada tipo de importación (RF-11 y RF-12).
@@ -48,8 +44,6 @@ export function ImportarExcel({ config, hayModulo, moduloId, onImportado }) {
   const [revision, setRevision] = useState(null);
   const [revisando, setRevisando] = useState(false);
   const [guardando, setGuardando] = useState(false);
-  const [error, setError] = useState('');
-  const [aviso, setAviso] = useState('');
 
   function enviar(url) {
     const datos = new FormData();
@@ -58,34 +52,29 @@ export function ImportarExcel({ config, hayModulo, moduloId, onImportado }) {
     return client.post(url, datos);
   }
 
-  function elegir(e) {
-    setArchivo(e.target.files[0] || null);
+  function elegir(f) {
+    setArchivo(f);
     setRevision(null);
-    setError('');
-    setAviso('');
   }
 
   async function revisar() {
-    setError('');
-    setAviso('');
     setRevision(null);
     setRevisando(true);
     try {
       const res = await enviar(`${config.ruta}/revisar`);
       setRevision(res.data);
     } catch (e) {
-      setError(mensajeDe(e, 'No se pudo revisar el archivo'));
+      toast.error(mensajeDe(e, 'No se pudo revisar el archivo'));
     } finally {
       setRevisando(false);
     }
   }
 
   async function confirmar() {
-    setError('');
     setGuardando(true);
     try {
       const res = await enviar(config.ruta);
-      setAviso(res.data.detalle);
+      toast.success(res.data.detalle);
       if (onImportado) onImportado();
       setRevision(null);
       setArchivo(null);
@@ -95,7 +84,7 @@ export function ImportarExcel({ config, hayModulo, moduloId, onImportado }) {
       if (e.response?.data?.errores) {
         setRevision((r) => ({ ...r, validas: [], errores: e.response.data.errores }));
       }
-      setError(mensajeDe(e, 'No se pudo importar el archivo'));
+      toast.error(mensajeDe(e, 'No se pudo importar el archivo'));
     } finally {
       setGuardando(false);
     }
@@ -104,111 +93,80 @@ export function ImportarExcel({ config, hayModulo, moduloId, onImportado }) {
   const conErrores = revision && revision.errores.length > 0;
 
   return (
-    <div className="tarjeta form-modulo">
-      <h3>{config.titulo}</h3>
-      <p className="nota">Columnas del Excel: {config.columnasExcel}</p>
-
-      <div className="fila-campos importar-controles">
-        <input key={inputKey} type="file" accept=".xlsx" onChange={elegir} />
-        <button
-          className="btn btn-principal btn-crear"
-          onClick={revisar}
-          disabled={!archivo || revisando || guardando}
-        >
-          {revisando ? 'Revisando…' : 'Revisar'}
-        </button>
+    <Card title={config.titulo}>
+      <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <p className="texto-muted">Columnas del Excel: {config.columnasExcel}</p>
+        <FileDropzone archivo={archivo} onChange={elegir} inputKey={inputKey} />
+        <div>
+          <Button onClick={revisar} disabled={!archivo || guardando} loading={revisando}>
+            {revisando ? 'Revisando…' : 'Revisar'}
+          </Button>
+        </div>
       </div>
-
-      {error && <p className="error">{error}</p>}
-      {aviso && <p className="exito">{aviso}</p>}
 
       {conErrores && (
         <>
-          <p className="error">
-            El archivo tiene {revision.errores.length} fila(s) con errores. Corrígelas en el
-            Excel y vuelve a subirlo. No se guardó nada.
+          <p className="card-body field-error" style={{ paddingTop: 0 }}>
+            El archivo tiene {revision.errores.length} fila(s) con errores. Corrígelas en el Excel y vuelve a
+            subirlo. No se guardó nada.
           </p>
-          <div className="tabla-contenedor">
-            <table className="tabla">
-              <thead>
-                <tr>
-                  <th>Fila</th>
-                  <th>Problema</th>
-                </tr>
-              </thead>
-              <tbody>
-                {revision.errores.map((e) => (
-                  <tr key={e.fila}>
-                    <td>{e.fila}</td>
-                    <td>{e.mensaje}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            filas={revision.errores}
+            rowKey={(e) => e.fila}
+            rowClass={() => 'fila-error'}
+            columnas={[
+              { titulo: 'Fila', render: (e) => e.fila },
+              { titulo: 'Problema', render: (e) => e.mensaje },
+            ]}
+          />
         </>
       )}
 
       {revision && !conErrores && (
         <>
-          <p className="exito">
-            Archivo correcto: {revision.validas.length} fila(s) listas para cargar. Revisa la
-            vista previa y confirma.
+          <p className="card-body" style={{ color: 'var(--ok)', fontWeight: 600, paddingBottom: 0 }}>
+            Archivo correcto: {revision.validas.length} fila(s) listas para cargar. Revisa la vista previa y
+            confirma.
           </p>
-          <div className="tabla-contenedor vista-previa">
-            <table className="tabla">
-              <thead>
-                <tr>
-                  {config.encabezados.map((h) => (
-                    <th key={h}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {revision.validas.map((v) => (
-                  <tr key={v.fila}>
-                    {config.celdas(v).map((c, i) => (
-                      <td key={i}>{c}</td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <DataTable
+            filas={revision.validas}
+            rowKey={(v) => v.fila}
+            columnas={config.encabezados.map((h, i) => ({
+              titulo: h,
+              render: (v) => config.celdas(v)[i],
+            }))}
+          />
+          <div className="card-body">
+            {!hayModulo && (
+              <p className="field-error" style={{ marginBottom: 10 }}>
+                No hay un módulo activo. Activa uno antes de confirmar.
+              </p>
+            )}
+            <Button onClick={confirmar} disabled={!hayModulo} loading={guardando}>
+              {guardando ? 'Guardando…' : 'Confirmar carga'}
+            </Button>
           </div>
-          {!hayModulo && (
-            <p className="error">No hay un módulo activo. Activa uno antes de confirmar.</p>
-          )}
-          <button
-            className="btn btn-principal btn-crear"
-            onClick={confirmar}
-            disabled={guardando || !hayModulo}
-          >
-            {guardando ? 'Guardando…' : 'Confirmar carga'}
-          </button>
         </>
       )}
-    </div>
+    </Card>
   );
 }
 
-// Importación de estudiantes y fechas de clase al módulo activo.
 // RF-06: lista de estudiantes inscritos en el módulo activo, con buscador.
 function ListaEstudiantes({ recarga }) {
   const [texto, setTexto] = useState('');
   const [consulta, setConsulta] = useState('');
   const [datos, setDatos] = useState(null);
-  const [error, setError] = useState('');
 
   useEffect(() => {
     let vigente = true;
-    setError('');
     client
       .get('/admin/estudiantes', { params: { q: consulta.trim() || undefined } })
       .then((res) => {
         if (vigente) setDatos(res.data);
       })
       .catch((e) => {
-        if (vigente) setError(mensajeDe(e, 'No se pudo cargar la lista de estudiantes'));
+        if (vigente) toast.error(mensajeDe(e, 'No se pudo cargar la lista de estudiantes'));
       });
     return () => {
       vigente = false;
@@ -221,76 +179,68 @@ function ListaEstudiantes({ recarga }) {
   }
 
   return (
-    <div className="tarjeta lista-estudiantes">
-      <h3>Lista de estudiantes del módulo activo</h3>
-      <form className="filtros-asistencia" onSubmit={buscar}>
-        <label className="campo">
-          Buscar
+    <Card title="Estudiantes del módulo activo">
+      <form className="filtros" onSubmit={buscar}>
+        <span className="input-wrap">
+          <Search size={16} aria-hidden="true" />
           <input
+            className="input"
+            aria-label="Buscar"
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
             maxLength={100}
             placeholder="Nombre o número de registro"
           />
-        </label>
-        <button className="btn btn-principal btn-crear" type="submit">
-          Buscar
-        </button>
+        </span>
+        <Button type="submit">Buscar</Button>
         {consulta && (
-          <button
-            className="btn btn-secundario"
-            type="button"
+          <Button
+            variant="ghost"
             onClick={() => {
               setTexto('');
               setConsulta('');
             }}
           >
             Limpiar
-          </button>
+          </Button>
         )}
       </form>
-      {error && <p className="error">{error}</p>}
-      {!datos && !error && <p className="nota">Cargando estudiantes…</p>}
-      {datos && !datos.modulo && <p className="nota">No hay un módulo activo.</p>}
-      {datos && datos.modulo && (
-        <>
-          <p className="nota">
-            {datos.total} {datos.total === 1 ? 'estudiante' : 'estudiantes'}
-            {consulta ? ' encontrados' : ' inscritos'}
-          </p>
-          {datos.total === 0 ? (
-            <p className="nota">
-              {consulta ? 'Ningún estudiante coincide con la búsqueda.' : 'Aún no hay estudiantes inscritos.'}
-            </p>
-          ) : (
-            <div className="tabla-contenedor">
-              <table className="tabla">
-                <thead>
-                  <tr>
-                    <th>Número de registro</th>
-                    <th>Nombre</th>
-                    <th>Correo</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {datos.estudiantes.map((e) => (
-                    <tr key={e.id}>
-                      <td>{e.codigo || '—'}</td>
-                      <td>{e.nombre}</td>
-                      <td>{e.email}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {!datos ? (
+        <Skeleton filas={5} />
+      ) : !datos.modulo ? (
+        <EmptyState icon={Users} title="Sin módulo activo" text="No hay un módulo activo." />
+      ) : (
+        <DataTable
+          filas={datos.estudiantes}
+          rowKey={(e) => e.id}
+          empty={
+            <EmptyState
+              icon={Users}
+              title={consulta ? 'Sin resultados' : 'Sin estudiantes'}
+              text={consulta ? 'Ningún estudiante coincide con la búsqueda.' : 'Aún no hay estudiantes inscritos.'}
+            />
+          }
+          columnas={[
+            { titulo: 'Estudiante', render: (e) => <Persona nombre={e.nombre} /> },
+            { titulo: 'Registro', className: 'mono', render: (e) => e.codigo || '—' },
+            { titulo: 'Correo', className: 'gris', render: (e) => e.email },
+          ]}
+          footer={
+            <div className="paginacion">
+              <span>
+                {datos.total} {datos.total === 1 ? 'estudiante' : 'estudiantes'}
+                {consulta ? ' encontrados' : ' inscritos'}
+              </span>
             </div>
-          )}
-        </>
+          }
+        />
       )}
-    </div>
+    </Card>
   );
 }
 
 export default function Estudiantes() {
+  usePageTitle('Estudiantes');
   const [modulo, setModulo] = useState(undefined); // undefined = cargando
   const [recarga, setRecarga] = useState(0); // refresca la lista tras importar
 
@@ -302,33 +252,24 @@ export default function Estudiantes() {
   }, []);
 
   return (
-    <div className="pagina">
-      <Link to="/admin" className="volver">
-        ← Volver al panel
-      </Link>
-      <h2>Estudiantes y fechas</h2>
-
+    <>
       {modulo === undefined ? (
-        <p className="nota">Cargando…</p>
+        <Skeleton filas={1} />
       ) : modulo ? (
-        <p className="nota modulo-destino">
+        <p className="texto-muted">
           Se importará al módulo activo: <strong>{modulo.nombre}</strong>
           {modulo.gestion ? ` (${modulo.gestion})` : ''}
         </p>
       ) : (
-        <p className="error modulo-destino">
+        <p className="field-error">
           No hay un módulo activo. Puedes revisar archivos, pero para guardarlos primero{' '}
           <Link to="/admin/modulos">activa un módulo</Link>.
         </p>
       )}
 
-      <ImportarExcel
-        config={ESTUDIANTES}
-        hayModulo={!!modulo}
-        onImportado={() => setRecarga((n) => n + 1)}
-      />
+      <ImportarExcel config={ESTUDIANTES} hayModulo={!!modulo} onImportado={() => setRecarga((n) => n + 1)} />
       <ImportarExcel config={FECHAS} hayModulo={!!modulo} />
       <ListaEstudiantes recarga={recarga} />
-    </div>
+    </>
   );
 }

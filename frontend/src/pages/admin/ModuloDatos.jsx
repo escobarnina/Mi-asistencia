@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { PlayCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 import client from '../../api/client';
 import { puedeActivar, textoFaltante, mensajeConfirmacion } from '../../api/modulos';
+import { Button, Card, Modal, Skeleton, StatusBadge } from '../../components/ui';
+import { mensajeDe, usePageTitle } from '../../utils/format';
 import { ESTUDIANTES, FECHAS, ImportarExcel } from './Estudiantes';
-
-function mensajeDe(error, porDefecto) {
-  return error.response?.data?.detalle || porDefecto;
-}
 
 // Pasos 2 y 3 de un módulo nuevo (RF-13): cargar sus estudiantes y fechas con la
 // vista previa de siempre (RF-16) y, cuando ya tiene ambos, activarlo.
@@ -14,15 +14,16 @@ export default function ModuloDatos() {
   const { id } = useParams();
   const navegar = useNavigate();
   const [modulo, setModulo] = useState(null);
-  const [error, setError] = useState('');
+  const [confirmando, setConfirmando] = useState(false);
   const [activando, setActivando] = useState(false);
+  usePageTitle(modulo ? modulo.nombre : 'Datos del módulo');
 
   const cargar = useCallback(async () => {
     try {
       const res = await client.get(`/modulos/${id}`);
       setModulo(res.data.modulo);
     } catch (e) {
-      setError(mensajeDe(e, 'No se pudo cargar el módulo'));
+      toast.error(mensajeDe(e, 'No se pudo cargar el módulo'));
     }
   }, [id]);
 
@@ -31,68 +32,53 @@ export default function ModuloDatos() {
   }, [cargar]);
 
   async function activar() {
-    if (!window.confirm(mensajeConfirmacion(modulo))) return;
-    setError('');
     setActivando(true);
     try {
       await client.post(`/modulos/${modulo.id}/activar`);
+      toast.success(`"${modulo.nombre}" es ahora el módulo activo.`);
       navegar('/admin/modulos', { replace: true });
     } catch (e) {
-      setError(mensajeDe(e, 'No se pudo activar el módulo'));
+      toast.error(mensajeDe(e, 'No se pudo activar el módulo'));
       setActivando(false);
+      setConfirmando(false);
     }
   }
 
   if (!modulo) {
     return (
-      <div className="pagina">
-        <Link to="/admin/modulos" className="volver">
-          ← Volver a módulos
-        </Link>
-        {error ? <p className="error">{error}</p> : <p className="nota">Cargando…</p>}
-      </div>
+      <Card>
+        <Skeleton filas={4} />
+      </Card>
     );
   }
 
   // Un módulo que ya estuvo activo es historia: sus datos no se modifican.
   const reemplazado = !modulo.activo && Boolean(modulo.activado_en);
-  const hayEstudiantes = Number(modulo.inscritos) > 0;
-  const hayFechas = Number(modulo.fechas) > 0;
 
   return (
-    <div className="pagina">
-      <Link to="/admin/modulos" className="volver">
-        ← Volver a módulos
-      </Link>
-      <h2>
-        {modulo.nombre}
-        {modulo.gestion ? ` (${modulo.gestion})` : ''}
-      </h2>
-
-      <ol className="pasos-modulo">
-        <li className="hecho">1. Módulo creado</li>
-        <li className={hayEstudiantes ? 'hecho' : ''}>
-          2a. Estudiantes: {modulo.inscritos}
-        </li>
-        <li className={hayFechas ? 'hecho' : ''}>2b. Fechas de clase: {modulo.fechas}</li>
-        <li className={modulo.activo ? 'hecho' : ''}>
-          3. {modulo.activo ? 'Módulo activo' : 'Activar'}
-        </li>
-      </ol>
-
-      {error && <p className="error">{error}</p>}
+    <>
+      <Card
+        title={`${modulo.nombre}${modulo.gestion ? ` (${modulo.gestion})` : ''}`}
+        actions={<StatusBadge estado={modulo.activo ? 'ACTIVO' : 'INACTIVO'} />}
+      >
+        <div className="card-body">
+          <p className="texto-muted">
+            {modulo.inscritos} {Number(modulo.inscritos) === 1 ? 'estudiante' : 'estudiantes'} · {modulo.fechas}{' '}
+            {Number(modulo.fechas) === 1 ? 'fecha' : 'fechas'} de clase
+          </p>
+        </div>
+      </Card>
 
       {reemplazado ? (
-        <p className="nota modulo-destino">
-          Este módulo ya se usó y fue reemplazado. Sus datos se conservan y no se pueden
-          modificar.
+        <p className="texto-muted">
+          Este módulo ya se usó y fue reemplazado. Sus datos se conservan y no se pueden modificar.
         </p>
       ) : (
         <>
-          <p className="nota modulo-destino">
+          <p className="texto-muted">
             Los archivos se importan a <strong>{modulo.nombre}</strong>
-            {modulo.activo ? ' (módulo activo)' : ' (todavía inactivo)'}. El módulo activo
-            actual no se modifica hasta que actives este.
+            {modulo.activo ? ' (módulo activo)' : ' (todavía inactivo)'}. El módulo activo actual no se modifica
+            hasta que actives este.
           </p>
           <ImportarExcel config={ESTUDIANTES} hayModulo moduloId={modulo.id} onImportado={cargar} />
           <ImportarExcel config={FECHAS} hayModulo moduloId={modulo.id} onImportado={cargar} />
@@ -100,24 +86,39 @@ export default function ModuloDatos() {
       )}
 
       {!modulo.activo && (
-        <div className="tarjeta form-modulo">
-          <h3>Activar módulo</h3>
-          {puedeActivar(modulo) ? (
-            <p className="nota">
-              Listo para activar: {modulo.inscritos} estudiantes y {modulo.fechas} fechas.
-            </p>
-          ) : (
-            <p className="nota">{textoFaltante(modulo)}. Impórtalos para poder activarlo.</p>
-          )}
-          <button
-            className="btn btn-principal btn-crear"
-            onClick={activar}
-            disabled={!puedeActivar(modulo) || activando}
-          >
-            {activando ? 'Activando…' : 'Activar módulo'}
-          </button>
-        </div>
+        <Card title="Activar módulo">
+          <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
+            {puedeActivar(modulo) ? (
+              <p className="texto-muted">
+                Listo para activar: {modulo.inscritos} estudiantes y {modulo.fechas} fechas.
+              </p>
+            ) : (
+              <p className="texto-muted">{textoFaltante(modulo)}. Impórtalos para poder activarlo.</p>
+            )}
+            <Button icon={PlayCircle} onClick={() => setConfirmando(true)} disabled={!puedeActivar(modulo)}>
+              Activar módulo
+            </Button>
+          </div>
+        </Card>
       )}
-    </div>
+
+      <Modal
+        open={confirmando}
+        icon={PlayCircle}
+        title="¿Activar este módulo?"
+        text={mensajeConfirmacion(modulo)}
+        onClose={() => !activando && setConfirmando(false)}
+        buttons={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmando(false)} disabled={activando}>
+              Cancelar
+            </Button>
+            <Button loading={activando} onClick={activar}>
+              Activar módulo
+            </Button>
+          </>
+        }
+      />
+    </>
   );
 }
