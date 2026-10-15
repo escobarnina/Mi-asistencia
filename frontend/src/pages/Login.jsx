@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, Mail, Lock, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import client from '../api/client';
 import { Button, Logo } from '../components/ui';
 import { usePageTitle } from '../utils/format';
 
@@ -17,6 +18,15 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [conError, setConError] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [moduloActivo, setModuloActivo] = useState(null);
+
+  // Módulo activo (público: solo nombre y gestión). Responde 204 si no hay ninguno.
+  useEffect(() => {
+    client
+      .get('/modulos/activo/resumen')
+      .then((res) => setModuloActivo(res.status === 200 && res.data?.nombre ? res.data : null))
+      .catch(() => setModuloActivo(null));
+  }, []);
 
   function cambiarPestana(nueva) {
     setPestana(nueva);
@@ -147,6 +157,15 @@ export default function Login() {
             {enviando ? 'Ingresando…' : 'Ingresar'}
             {!enviando && <ArrowRight size={18} aria-hidden="true" />}
           </Button>
+          {moduloActivo && (
+            <p className="login-pie">
+              Módulo activo:{' '}
+              <strong>
+                {moduloActivo.nombre}
+                {moduloActivo.gestion ? ` · ${moduloActivo.gestion}` : ''}
+              </strong>
+            </p>
+          )}
         </form>
       </div>
     </div>

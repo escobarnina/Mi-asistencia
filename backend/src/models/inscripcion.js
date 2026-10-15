@@ -16,6 +16,12 @@ module.exports = (sequelize, DataTypes) =>
         type: DataTypes.INTEGER,
         allowNull: false,
       },
+      // Cómo se agregó el estudiante al módulo: a mano o desde un Excel.
+      origen: {
+        type: DataTypes.ENUM('MANUAL', 'EXCEL'),
+        allowNull: false,
+        defaultValue: 'EXCEL',
+      },
     },
     {
       tableName: 'inscripcion',
