@@ -1,52 +1,99 @@
 # Sistema de Registro y Control de Asistencia
 
-Base del núcleo (core) del sistema de asistencia. Esta primera entrega deja
-**login y logout funcionando** y toda la estructura lista para que el equipo
-construya el resto de funciones encima.
+Aplicación web para registrar y consultar la asistencia de estudiantes a clases. Se reutiliza
+en sucesivos módulos académicos cargando archivos Excel con los estudiantes y las fechas de
+clase. **Solo hay un módulo activo a la vez**; los módulos anteriores se conservan en la base
+de datos.
 
 > Proyecto universitario (6 integrantes). Todo el texto visible está en español.
 > Zona horaria de la app: `America/La_Paz`.
 
+## Contenido
+
+1. [Stack](#stack)
+2. [Requisitos](#requisitos)
+3. [Instalación en limpio (paso a paso)](#instalación-en-limpio-paso-a-paso)
+4. [Usuarios y datos de prueba](#usuarios-y-datos-de-prueba)
+5. [Cómo usar el sistema](#cómo-usar-el-sistema)
+6. [Cumplimiento de requisitos](#cumplimiento-de-requisitos)
+7. [Limitación conocida (RN-02)](#limitación-conocida-rn-02)
+8. [Pruebas automáticas](#pruebas-automáticas)
+9. [API](#api)
+10. [Despliegue en una máquina virtual](#despliegue-en-una-máquina-virtual)
+11. [Estructura del proyecto](#estructura-del-proyecto)
+
+---
+
 ## Stack
 
-- **Backend:** Node.js 20 + Express, Sequelize + sequelize-cli (migraciones), mysql2, jsonwebtoken, bcryptjs, zod.
+- **Backend:** Node.js 20 + Express, Sequelize + sequelize-cli (migraciones), mysql2, jsonwebtoken, bcryptjs, zod, exceljs, multer.
 - **Base de datos:** MySQL 8 (utf8mb4).
 - **Frontend:** React 18 + Vite (JavaScript), react-router-dom, axios.
 - **Despliegue:** Docker Compose (db + backend + frontend con nginx).
 
-> Notas técnicas: el backend usa **CommonJS** (para que `sequelize-cli` y `Jest`
-> funcionen sin configuración extra) y **bcryptjs** (bcrypt en JavaScript puro,
-> sin compilación nativa, igual en Windows y en Docker). El frontend usa ESM (Vite).
+> Notas técnicas: el backend usa **CommonJS** (para que `sequelize-cli` y `Jest` funcionen sin
+> configuración extra) y **bcryptjs** (JavaScript puro, sin compilación nativa, igual en Windows
+> y en Docker). El frontend usa ESM (Vite).
 
 ---
 
 ## Requisitos
 
-- **Docker** y **Docker Compose** (Docker Desktop en Windows/Mac).
+**Opción A (recomendada): con Docker**
+- **Docker Desktop** (Windows/Mac) o Docker Engine + Compose (Linux).
 - **Git**.
-- (Opcional) **Node.js 20+** si quieres correr los tests o la semilla desde tu máquina.
+- Puertos libres: `80` (web), `8000` (API) y `3306` (MySQL).
+
+**Opción B: sin Docker**
+- **Node.js 20+** y **MySQL 8**, más **Git**.
+- Una base vacía (`asistencia`) y un usuario con permisos sobre ella.
 
 ---
 
-## Cómo levantar en local
+## Instalación en limpio (paso a paso)
 
-1. Copia las variables de ejemplo y ajústalas:
-   ```bash
-   cp .env.example .env
-   ```
-2. Levanta todo:
-   ```bash
-   docker compose up -d --build
-   ```
-3. Carga los datos iniciales (semilla):
-   ```bash
-   docker compose exec backend npm run seed
-   ```
-4. Abre el sistema:
-   - **Frontend:** http://localhost
-   - **Backend (healthcheck):** http://localhost:8000/api/health → `{"status":"ok"}`
+### Con Docker
 
-### Usuarios de prueba (los crea la semilla)
+```bash
+# 1. Clonar
+git clone https://github.com/escobarnina/Mi-asistencia.git
+cd Mi-asistencia
+
+# 2. Variables de entorno (los valores del ejemplo sirven para una demo local)
+cp .env.example .env            # en Windows (PowerShell): Copy-Item .env.example .env
+
+# 3. Construir y levantar db + backend + frontend (las migraciones corren solas al iniciar)
+docker compose up -d --build
+
+# 4. Cargar los datos de demostración
+docker compose exec backend npm run seed
+```
+
+Abrir:
+- **Sistema:** http://localhost
+- **Salud del backend:** http://localhost:8000/api/health → `{"status":"ok"}`
+
+Para empezar de cero (borra la base local): `docker compose down -v`.
+
+### Sin Docker
+
+```bash
+git clone https://github.com/escobarnina/Mi-asistencia.git
+cd Mi-asistencia
+cp .env.example .env            # editar: DB_HOST=localhost y las credenciales de tu MySQL
+cd backend && npm install
+npm run migrate                 # crea las tablas
+npm run seed                    # datos de demostración
+npm start                       # API en http://localhost:8000
+# en otra terminal:
+cd frontend && npm install && npm run dev    # http://localhost:5173
+```
+
+---
+
+## Usuarios y datos de prueba
+
+La semilla (`npm run seed`) es **idempotente**: se puede correr varias veces sin duplicar nada.
 
 | Rol | Entra con | Contraseña |
 |---|---|---|
@@ -54,265 +101,182 @@ construya el resto de funciones encima.
 | Estudiante | `est1@ejemplo.com` **o** código `220001` | _(sin contraseña)_ |
 | Estudiante | `est2@ejemplo.com` **o** código `220002` | _(sin contraseña)_ |
 
-> Los valores del admin salen de `ADMIN_EMAIL` / `ADMIN_PASSWORD` del `.env`.
+> Los datos del admin salen de `ADMIN_EMAIL` / `ADMIN_PASSWORD` del `.env`.
+
+Además crea el **Módulo 1** (gestión 2-2026), **activo**, con los 2 estudiantes inscritos y
+**3 fechas de clase calculadas en La Paz: ayer, hoy y mañana (18:00–21:00)**. Así, apenas se
+levanta el proyecto:
+
+- el estudiante puede **marcar asistencia hoy**;
+- ayer aparece como **Falta** automática (tanto para él como en el panel del admin);
+- mañana aparece como próxima.
+
+Si al correr la semilla ya hay otro módulo activo, no lo pisa y avisa. Cada día que se
+vuelva a correr agrega las tres fechas de ese día sin duplicar.
+
+**Excels de ejemplo** para probar la importación (formato del documento de requisitos):
+[`docs/ejemplos/estudiantes.xlsx`](docs/ejemplos/estudiantes.xlsx) y
+[`docs/ejemplos/fechas.xlsx`](docs/ejemplos/fechas.xlsx). Se regeneran con
+`cd backend && node ../docs/ejemplos/generar.js`.
 
 ---
 
-## Cómo correr la semilla
+## Cómo usar el sistema
 
-La semilla es **idempotente** (se puede correr varias veces sin duplicar datos).
-Crea el admin, un "Módulo 1" activo de gestión "2-2026" y 2 estudiantes inscritos.
+### Administrador (`/login` → panel `/admin`)
 
-```bash
-# Dentro de Docker (recomendado):
-docker compose exec backend npm run seed
+1. **Iniciar un módulo nuevo** — *Módulos* (`/admin/modulos`):
+   1. **Crear** el módulo (queda inactivo).
+   2. **Cargar datos** (`/admin/modulos/:id/datos`): subir el Excel de **estudiantes** (número de
+      registro, nombre completo, correo) y el de **fechas** (fecha, hora inicio, hora fin). Cada
+      archivo tiene **vista previa** (**Revisar**) antes de **Confirmar carga**; si hay un solo
+      error no se guarda nada y se listan las filas a corregir.
+   3. **Activar**: el botón solo se habilita si el módulo tiene al menos 1 estudiante y 1 fecha, y
+      pide confirmación (*«Se activará "X" con N estudiantes y M fechas. El módulo actual dejará
+      de estar activo; sus datos se conservan.»*). El módulo anterior **no se borra** y el nuevo
+      empieza sin asistencias.
+2. **Estudiantes** (`/admin/estudiantes`): importar al módulo activo y ver la **lista de
+   estudiantes** (registro, nombre, correo) con buscador por nombre o número de registro.
+3. **Asistencias** (`/admin/asistencias`): ver todas las clases del módulo activo con el estado de
+   cada estudiante y los totales (presentes, faltas, pendientes); filtrar por fecha o estudiante.
+   - **Corregir** una asistencia (Presente/Falta) en cualquier fecha, con un motivo obligatorio.
+     Queda auditada: usuario, fecha y hora, valor anterior y nuevo.
+   - **Exportar a Excel** (`.xlsx`) con los mismos estados que se ven en pantalla.
+4. **Actividades** (`/admin/actividades`): historial de acciones del módulo activo (inicios y
+   cierres de sesión, marcas, correcciones, importaciones, activaciones, exportaciones), con
+   filtros por estudiante (nombre o registro), rango de fechas y acción, y paginación.
 
-# O desde tu máquina (necesita Node y la base accesible en DB_HOST):
-cd backend && npm install && npm run seed
-```
+### Estudiante (`/login` → `/estudiante`)
 
----
-
-## Cómo correr los tests
-
-Los tests (Jest + supertest) usan una base aparte llamada `asistencia_test`
-en el **mismo MySQL** (se crea automáticamente). Prueban: login de admin
-(correcto/incorrecto), login de estudiante por correo y por código, estudiante
-no inscrito, logout que invalida el token, y el registro de `LOGIN`, `LOGOUT`
-y `LOGIN_FALLIDO` en el historial.
-
-```bash
-# Con la base levantada (docker compose up -d db) y un .env con DB_HOST=localhost:
-cd backend
-npm install
-npm test
-```
-
----
-
-## Cómo desplegar en la máquina virtual (VM)
-
-1. Clonar el repositorio:
-   ```bash
-   git clone https://github.com/escobarnina/Mi-asistencia.git
-   cd Mi-asistencia
-   ```
-2. Crear el `.env` a partir del ejemplo y **cambiar las claves** (contraseñas de
-   MySQL, `JWT_SECRET`) por valores seguros:
-   ```bash
-   cp .env.example .env
-   nano .env
-   ```
-3. Levantar todo:
-   ```bash
-   docker compose up -d --build
-   ```
-4. Cargar la semilla:
-   ```bash
-   docker compose exec backend npm run seed
-   ```
-5. Entrar desde el navegador: **http://IP_DE_LA_VM**
-
-> Como el frontend (nginx) hace de proxy de `/api` hacia el backend, el navegador
-> habla siempre con el mismo origen (la IP de la VM), así que no hace falta tocar
-> CORS. `CORS_ORIGINS` solo importa para el modo desarrollo de Vite (puerto 5173).
+1. Entra con su **correo o número de registro** (sin contraseña). Debe estar inscrito en el
+   módulo activo; si no, ve un mensaje de error.
+2. **Marcar asistencia**: el botón se habilita solo el **día de la clase** (todo el día, sin
+   tolerancias) y permite **una sola marca** por fecha; guarda la fecha y hora reales.
+3. **Historial**: lista de fechas del módulo con Presente / Falta / Pendiente / Próxima, la hora de
+   cada marca y un resumen de presentes y faltas. Una fecha pasada sin marca figura como **Falta**
+   automáticamente; el estudiante no puede completarla ni cambiarla (solo el admin).
 
 ---
 
-## Base de datos compartida (opcional, para integración/demo)
+## Cumplimiento de requisitos
 
-Por defecto cada integrante levanta su **propia base local** y corre `npm run seed`
-para tener la **misma data** (nadie puebla a mano). Si en cambio quieren **una sola
-base física** donde todos vean los mismos datos (p. ej. para la demo integrada):
+### Requerimientos funcionales
 
-1. Montar la base en un solo lugar (lo natural: la **VM del docente**):
-   ```bash
-   docker compose up -d db
-   ```
-2. Aplicar migraciones y semilla **una sola vez** contra esa base.
-3. Cada compañero apunta su `.env` a esa base (sin levantar su propio `db`):
-   ```
-   DB_HOST=IP_DE_LA_VM
-   DB_PORT=3306
-   MYSQL_DATABASE=asistencia
-   MYSQL_USER=asistencia
-   MYSQL_PASSWORD=la_misma_clave
-   ```
-   y levanta solo backend/frontend.
-
-**Cuidados:** una sola persona debería aplicar cambios de esquema (migraciones) para
-no romperle la base a los demás; usar contraseña fuerte y, de ser posible, restringir
-el acceso por IP (no exponer MySQL abiertamente a internet).
-
----
-
-## Endpoints de autenticación (ya implementados)
-
-| Método | Ruta | Descripción |
+| Código | Requisito | Dónde se cubre |
 |---|---|---|
-| `GET` | `/api/health` | Estado del backend. |
-| `POST` | `/api/auth/login` | Login. Body: `{ "identificador": "...", "password": "..." \| null }`. |
-| `POST` | `/api/auth/logout` | Cierra sesión (revoca el token). Requiere token. |
-| `GET` | `/api/auth/me` | Devuelve el usuario del token. Requiere token. |
+| RF-01 | Ingreso de estudiantes (correo o registro, solo inscritos del módulo activo, error si no) | `POST /api/auth/login` · pantalla `/login` · `authService.js` |
+| RF-02 | Acceso del administrador, funciones restringidas, cerrar sesión | `POST /api/auth/login` y `/logout` · middleware `requireAdmin` · barra superior |
+| RF-03 | Registrar asistencia (botón, fecha y hora reales, una marca por fecha, deshabilitado fuera de fecha) | `POST /api/asistencia/marcar`, `GET /api/asistencia/hoy` · `/estudiante` |
+| RF-04 | Faltas: fecha pasada sin marca = Falta; solo el admin corrige | `services/estadoAsistencia.js` (regla única) · `/estudiante` y `/admin/asistencias` |
+| RF-05 | Historial personal con hora de la marca y resumen | `GET /api/asistencia/mis-asistencias` · `/estudiante` |
+| RF-06 | Lista de estudiantes del módulo activo con búsqueda | `GET /api/admin/estudiantes?q=` · `/admin/estudiantes` |
+| RF-07 | Modificar asistencias con registro de cambios (usuario, fecha, hora, anterior y nuevo) | `PUT /api/admin/asistencias/:sesionId/:estudianteId` · `/admin/asistencias` · tabla `asistencia_cambio` |
+| RF-08 | Vista general de asistencias con filtros y totales | `GET /api/admin/asistencias` · `/admin/asistencias` |
+| RF-09 | Registro de actividades (usuario, acción, fecha y hora, registro afectado) | `ActividadService.registrar(...)` · tabla `actividad` |
+| RF-10 | Consulta de actividades del módulo activo, filtros por estudiante o fecha, solo admin | `GET /api/actividades` · `/admin/actividades` |
+| RF-11 | Importar estudiantes desde Excel (obligatorios, duplicados, errores por fila) | `POST /api/importacion/estudiantes` · `/admin/modulos/:id/datos` y `/admin/estudiantes` |
+| RF-12 | Importar fechas y horarios (la marca se permite todo el día de clase) | `POST /api/importacion/fechas` · `asistenciaService.js` |
+| RF-13 | Activar un nuevo módulo con confirmación; el nuevo empieza sin asistencias; el anterior se conserva | `POST /api/modulos/:id/activar` · `/admin/modulos` y `/admin/modulos/:id/datos` |
+| RF-14 | Persistencia en base de datos | MySQL 8 + migración inicial (9 tablas) · volumen Docker `db_data` |
+| RF-15 | Conservación de módulos anteriores, cada registro asociado a su módulo | `modulo_id` en inscripciones, fechas, importaciones y actividades; ver RN-08 |
+| RF-16 *(opcional)* | Vista previa antes de activar un nuevo módulo | `POST /api/importacion/*/revisar` · botón **Revisar** |
+| RF-17 *(opcional)* | Exportar a Excel las asistencias del módulo activo | `GET /api/admin/asistencias/exportar` (`.xlsx`) · botón **Exportar a Excel** |
+| RF-18 *(opcional)* | Mensajes de confirmación y error al marcar, importar o modificar | Mensajes en español en toda la API y en las pantallas |
 
-El login devuelve: `{ access_token, token_type: "bearer", usuario: { id, nombre, email, codigo, rol } }`.
+### Reglas de negocio
+
+| Código | Regla | Cómo se cumple |
+|---|---|---|
+| RN-01 | Solo un módulo activo a la vez | Columna generada `activo_unico` con UNIQUE en `modulo` + activación en transacción (`moduloService.activar`) |
+| RN-02 | Número de registro único entre los estudiantes del módulo activo | Único en `usuario` y en `inscripcion (modulo, estudiante)`; la importación rechaza duplicados. **Es más estricto que lo pedido**: ver [limitación](#limitación-conocida-rn-02) |
+| RN-03 | Una sola marca por estudiante y fecha de clase | UNIQUE `(sesion_id, estudiante_id)` en `asistencia` |
+| RN-04 | Solo se marca durante el día de clase programado | `asistenciaService.js` compara con la fecha de hoy en La Paz |
+| RN-05 | Al terminar el día, la ausencia de marca es Falta | `estadoAsistencia.js`: fecha pasada sin registro = `FALTA` (estudiante, panel admin y Excel) |
+| RN-06 | Solo el admin modifica asistencias fuera de fecha | Rutas `/api/admin/*` con `requireAdmin`; el estudiante solo puede marcar hoy |
+| RN-07 | Toda modificación administrativa queda auditada | Tabla `asistencia_cambio` + registro `MODIFICAR_ASISTENCIA` en actividades |
+| RN-08 | El reinicio no borra información histórica | Activar solo cambia la bandera `activo`; nada se elimina |
 
 ---
 
-## Trabajo del equipo (routers preparados)
-
-Cada router está creado y montado bajo `/api`. Cada integrante trabaja en **su
-archivo** para no chocar. Usen `ActividadService.registrar(...)` para dejar
-registro en el historial (RF-09).
-
-| Router (archivo) | Ruta base | Requisitos | Responsable |
-|---|---|---|---|
-| `src/routers/auth.js` | `/api/auth` | RF-01, RF-02, RF-09 | **Núcleo (ya hecho)** |
-| `src/routers/modulos.js` | `/api/modulos` | RF-13 | **Hecho** (ver «Iniciar un módulo nuevo») |
-| `src/routers/importacion.js` | `/api/importacion` | RF-11, RF-12, RF-16 | **Hecho** (ver abajo) |
-| `src/routers/asistencia.js` | `/api/asistencia` | RF-03 a RF-05 | **Hecho** (ver abajo) |
-| `src/routers/admin.js` | `/api/admin` | RF-06 a RF-08, RF-17 | _asignar_ |
-| `src/routers/actividades.js` | `/api/actividades` | RF-10 | _asignar_ |
-
----
-
-## Importación desde Excel (RF-11, RF-12, RF-16)
-
-El administrador carga los **estudiantes** y las **fechas de clase** del módulo
-activo desde archivos `.xlsx`. En el frontend: panel admin → tarjeta
-**"Estudiantes"** (`/admin/estudiantes`).
-
-**Flujo:** el admin sube el archivo y pulsa **Revisar** (vista previa, no guarda
-nada). Si hay errores se listan por fila. Si no hay errores, pulsa
-**Confirmar carga** y se guarda todo.
-
-**Regla "todo o nada":** si el archivo tiene **un solo error**, no se guarda
-ninguna fila. Así nunca queda una carga a medias.
-
-### Endpoints (solo ADMIN, archivo en el campo `archivo`, máx. 5 MB)
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| `POST` | `/api/importacion/estudiantes/revisar` | Vista previa de estudiantes. No guarda. |
-| `POST` | `/api/importacion/estudiantes` | Guarda estudiantes y los inscribe en el módulo destino (`modulo_id`, o el activo). |
-| `POST` | `/api/importacion/fechas/revisar` | Vista previa de fechas de clase. No guarda. |
-| `POST` | `/api/importacion/fechas` | Guarda las fechas en `sesion_clase` del módulo destino (`modulo_id`, o el activo). |
-
-Las rutas de revisión devuelven `{ archivo, total, validas: [...], errores: [{ fila, mensaje }] }`.
-Las de guardado devuelven `201` si todo salió bien, `400` con `errores` si el
-archivo tiene errores, o `409` si no hay un módulo activo.
-
-### Formato de los Excel
-
-Primera hoja, primera fila = encabezados (se aceptan con o sin tildes/mayúsculas).
-
-**Estudiantes:**
-
-| Número de registro | Nombre completo | Correo electrónico |
-|---|---|---|
-| 1001 | Juan Pérez | juan@gmail.com |
-
-**Fechas de clase:**
-
-| Fecha | Hora inicio | Hora fin |
-|---|---|---|
-| 05/10/2026 | 18:00 | 21:00 |
-
-La fecha se lee como **día/mes/año**. También se aceptan celdas con formato de
-fecha/hora de Excel.
-
-### Qué se valida
-
-- **Estudiantes:** campos obligatorios, correo válido y números de registro o correos
-  repetidos en el archivo. También que el número no esté registrado con otro correo
-  (o al revés) y que no pertenezca a un administrador.
-  - Si el estudiante ya existe de un módulo anterior, no se duplica: solo se inscribe
-    (y se reactiva si estaba inactivo).
-  - Si ya estaba inscrito, se omite.
-- **Fechas:** fecha real (no 31/02), horas válidas, hora de fin posterior a la de
-  inicio, fechas repetidas en el archivo y fechas que ya existen en el módulo activo.
-
-Cada importación guarda un resumen en la tabla `importacion` y registra
-`IMPORTAR_ESTUDIANTES` / `IMPORTAR_FECHAS` en el historial de actividad.
-
-> **Para "Marcar asistencia" (área 3):** las fechas importadas quedan en
-> `sesion_clase` (`modulo_id`, `fecha` como `AAAA-MM-DD`, `hora_inicio`, `hora_fin`,
-> `cerrada = false`). Esas son las fechas en las que se habilita el botón.
-
-**Archivos:** `src/routers/importacion.js`, `src/services/importacionService.js`,
-`src/services/excelService.js`, `src/schemas/importacion.js`,
-`tests/test_importacion.test.js` y `frontend/src/pages/admin/Estudiantes.jsx`.
-
----
-
-## Iniciar un módulo nuevo (RF-13)
-
-Los módulos se preparan **antes** de activarse; el módulo activo no se toca hasta el final.
-
-1. **Crear** (Panel → Módulos → *Nuevo módulo*). Queda **inactivo**.
-2. **Cargar datos** en ese módulo (botón *Cargar datos*): subir el Excel de estudiantes y el
-   de fechas, con la misma vista previa (RF-16). Se validan contra el módulo destino, así que
-   un estudiante o una fecha del módulo anterior se pueden volver a cargar sin problema.
-   Los endpoints de importación aceptan `modulo_id`; sin él usan el módulo activo.
-3. **Activar**: el botón solo se habilita si el módulo tiene al menos 1 estudiante y 1 fecha
-   (el backend lo exige y responde `400` si no). Antes pide confirmación:
-   *«Se activará "X" con N estudiantes y M fechas. El módulo actual dejará de estar activo;
-   sus datos se conservan.»*
-
-Al activar, el módulo anterior solo pasa a inactivo: sus estudiantes, fechas, asistencias y
-actividades **no se borran** (RN-08) y el módulo nuevo empieza sin asistencias. Un módulo que
-ya estuvo activo y fue reemplazado no admite nuevas importaciones.
-`GET /api/modulos` devuelve por módulo `inscritos` y `fechas`. La activación queda en el
-historial (`ACTIVAR_MODULO`).
-
-### Limitación conocida (RN-02)
+## Limitación conocida (RN-02)
 
 El **número de registro y el correo son únicos a nivel global** (tabla `usuario`), no solo
 dentro de un módulo. Un mismo estudiante se reutiliza y se vuelve a inscribir en cada módulo
-nuevo sin problema, pero no se puede cargar a otra persona con un número de registro o correo
-que ya pertenece a un estudiante de un módulo anterior, ni cambiar el correo de alguien
-existente por esta vía. Hacerlos únicos solo por módulo requeriría un cambio de esquema.
+nuevo sin problema, pero:
 
-## Marcar asistencia (RF-03, RF-04, RF-05)
+- no se puede cargar a **otra persona** con un número de registro o correo que ya pertenece a un
+  estudiante de un módulo anterior;
+- no se puede cambiar el correo (o el número) de un estudiante existente mediante la importación.
 
-El estudiante marca su asistencia desde su página de inicio (`/estudiante`) y ve
-su historial con un resumen.
+Hacerlos únicos solo por módulo requeriría un cambio de esquema (separar la identidad del
+estudiante de su inscripción), que queda fuera de esta versión.
 
-**Reglas para marcar** (si no se cumple alguna, el botón queda deshabilitado y se
-explica el motivo):
-1. Hay un módulo activo y el estudiante está inscrito en él.
-2. Hoy hay una fecha de clase (`sesion_clase`) en el módulo activo. "Hoy" se calcula
-   con la zona horaria de La Paz.
-3. Esa clase no está cerrada (`cerrada = false`).
-4. El estudiante no tiene ya un registro para esa clase (una sola marca).
+Otras decisiones: un módulo que ya estuvo activo y fue reemplazado no admite nuevas
+importaciones (se conserva tal cual), y la consulta de módulos anteriores queda fuera del
+alcance, como indica el documento de requisitos.
 
-Se puede marcar **todo el día de clase**; el horario es solo informativo (RF-12).
-La marca guarda `estado = PRESENTE`, `origen = ESTUDIANTE`, la hora real y la IP,
-y registra `MARCAR_ASISTENCIA` en el historial.
+---
 
-### Endpoints (solo ESTUDIANTE)
+## Pruebas automáticas
 
-| Método | Ruta | Descripción |
+Los tests (Jest + supertest) usan una base aparte, `asistencia_test`, en el **mismo MySQL** (se
+crea sola). Hay 7 suites: autenticación, módulos, activación de un módulo nuevo, importación,
+asistencia del estudiante, panel admin y actividades.
+
+```bash
+# Con la base levantada (docker compose up -d db). Desde tu máquina el host es localhost:
+cd backend
+npm install
+DB_HOST=localhost npm test          # PowerShell: $env:DB_HOST='localhost'; npm test
+```
+
+También se pueden correr dentro del contenedor. La imagen de producción no incluye `tests/`
+(está en `backend/.dockerignore`), así que se monta la carpeta al ejecutar (99/99 en verde):
+
+```bash
+# Desde la raíz del repo. En Git Bash de Windows, MSYS_NO_PATHCONV evita que cambie la ruta.
+MSYS_NO_PATHCONV=1 docker compose run --rm -v "$(pwd -W)/backend/tests:/app/tests" --entrypoint "" backend npm test
+# Linux/macOS: docker compose run --rm -v ./backend/tests:/app/tests --entrypoint "" backend npm test
+```
+
+---
+
+## API
+
+Todas las rutas cuelgan de `/api`. Salvo `health` y `login`, requieren el token
+(`Authorization: Bearer <token>`).
+
+| Área | Rutas | Rol |
 |---|---|---|
-| `GET` | `/api/asistencia/hoy` | Clase de hoy, marca existente, `puedeMarcar` y `motivo`. |
-| `POST` | `/api/asistencia/marcar` | Marca PRESENTE en la clase de hoy. `409` si no se puede (con el motivo). |
-| `GET` | `/api/asistencia/mis-asistencias` | Fechas del módulo activo con su estado y `resumen`. |
+| Salud | `GET /health` | público |
+| Auth | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | todos |
+| Módulos | `GET /modulos`, `GET /modulos/activo`, `GET /modulos/:id`, `POST /modulos`, `PATCH /modulos/:id`, `POST /modulos/:id/activar` | admin (`/modulos/activo` también estudiante) |
+| Importación | `POST /importacion/estudiantes[/revisar]`, `POST /importacion/fechas[/revisar]` (archivo `.xlsx` en el campo `archivo`, máx. 5 MB; `modulo_id` opcional) | admin |
+| Asistencia (estudiante) | `GET /asistencia/hoy`, `POST /asistencia/marcar`, `GET /asistencia/mis-asistencias` | estudiante |
+| Panel admin | `GET /admin/estudiantes?q=`, `GET /admin/asistencias?fecha=&estudiante=`, `GET /admin/asistencias/exportar`, `PUT /admin/asistencias/:sesionId/:estudianteId` | admin |
+| Actividades | `GET /actividades?estudiante=&fecha=&desde=&hasta=&accion=&pagina=&limite=` | admin |
 
-**Estados del historial:**
+El login recibe `{ "identificador": "...", "password": "..." | null }` y devuelve
+`{ access_token, token_type: "bearer", usuario: { id, nombre, email, codigo, rol } }`.
 
-| Estado | Significado |
-|---|---|
-| `PRESENTE` / `FALTA` | Lo que esté guardado en `asistencia`. |
-| `FALTA` (calculada) | Fecha pasada sin registro (RF-04). |
-| `PENDIENTE` | Hoy, todavía sin marcar. |
-| `PROXIMA` | Fecha futura. |
+---
 
-> **Para el panel admin (área 4):** esta parte **no guarda** las faltas; solo las
-> muestra calculadas. "Generar faltas del día" (origen `SISTEMA`) y las
-> correcciones con auditoría quedan para `routers/admin.js`.
+## Despliegue en una máquina virtual
 
-**Archivos:** `src/routers/asistencia.js`, `src/services/asistenciaService.js`,
-`tests/test_asistencia.test.js` y `frontend/src/pages/estudiante/Inicio.jsx`.
+1. Instalar Docker y clonar el repositorio (`git clone https://github.com/escobarnina/Mi-asistencia.git`).
+2. `cp .env.example .env` y **cambiar las claves** (contraseñas de MySQL, `JWT_SECRET`,
+   `ADMIN_PASSWORD`) por valores seguros.
+3. `docker compose up -d --build` y luego `docker compose exec backend npm run seed`.
+4. Entrar desde el navegador: **http://IP_DE_LA_VM**
+
+El frontend (nginx) hace de proxy de `/api` hacia el backend, así que el navegador habla siempre
+con el mismo origen y no hace falta tocar CORS. `CORS_ORIGINS` solo importa en modo desarrollo
+de Vite (puerto 5173).
+
+**Base compartida (opcional, para una demo integrada):** levantar solo `db` en un lugar
+(`docker compose up -d db`), aplicar migraciones y semilla una sola vez, y apuntar el `.env` de
+cada integrante a esa base (`DB_HOST=IP_DE_LA_VM`, mismas credenciales). Una sola persona debería
+aplicar cambios de esquema, usar contraseña fuerte y restringir el acceso a MySQL por IP.
 
 ---
 
@@ -320,18 +284,20 @@ y registra `MARCAR_ASISTENCIA` en el historial.
 
 ```
 .
-├── docker-compose.yml
-├── .env.example
+├── docker-compose.yml · .env.example
+├── docs/ejemplos/          Excels de ejemplo (estudiantes y fechas) + generar.js
 ├── backend/
 │   ├── Dockerfile · entrypoint.sh
-│   └── src/
-│       ├── server.js · config/ · database.js
-│       ├── models/        (9 tablas + asociaciones)
-│       ├── migrations/     (1ª migración = todas las tablas)
-│       ├── schemas/ · services/ · routers/ · core/ · middleware/
-│       └── seed.js
+│   ├── src/
+│   │   ├── server.js · config/ · database.js
+│   │   ├── models/         (9 tablas + asociaciones)
+│   │   ├── migrations/     (1ª migración = todas las tablas)
+│   │   ├── routers/        auth · modulos · importacion · asistencia · admin · actividades
+│   │   ├── services/       lógica de negocio (estadoAsistencia.js = regla de Falta)
+│   │   ├── schemas/ · core/ · middleware/
+│   │   └── seed.js
 │   └── tests/              (Jest + supertest)
 └── frontend/
     ├── Dockerfile · nginx.conf · vite.config.js
-    └── src/ (api/ · context/ · components/ · pages/)
+    └── src/ (api/ · context/ · components/ · pages/admin · pages/estudiante)
 ```

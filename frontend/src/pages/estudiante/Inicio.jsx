@@ -1,39 +1,60 @@
 import { useEffect, useState } from 'react';
+import { CalendarDays, Check, CheckCircle2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import client from '../../api/client';
+import { Button, Card, EmptyState, Skeleton, StatusBadge } from '../../components/ui';
+import {
+  diaCorto,
+  diaNombre,
+  fechaLarga,
+  horaLegible,
+  horaMarca,
+  hoyLaPaz,
+  mensajeDe,
+  porcentaje,
+  usePageTitle,
+} from '../../utils/format';
 
-function mensajeDe(error, porDefecto) {
-  return error.response?.data?.detalle || porDefecto;
+// Anillo de progreso con el % de asistencia.
+function Anillo({ valor }) {
+  const r = 42;
+  const c = 2 * Math.PI * r;
+  const lleno = valor === null ? 0 : (valor / 100) * c;
+  return (
+    <div className="anillo">
+      <svg viewBox="0 0 100 100" width="96" height="96" aria-hidden="true">
+        <circle cx="50" cy="50" r={r} fill="none" stroke="var(--next-bg)" strokeWidth="10" />
+        {lleno > 0 && (
+          <circle
+            cx="50"
+            cy="50"
+            r={r}
+            fill="none"
+            stroke="var(--primary)"
+            strokeWidth="10"
+            strokeLinecap="round"
+            strokeDasharray={`${lleno} ${c}`}
+            transform="rotate(-90 50 50)"
+          />
+        )}
+      </svg>
+      <span aria-label={valor === null ? 'Sin datos' : `${valor}% de asistencia`}>
+        {valor === null ? '—' : `${valor}%`}
+      </span>
+    </div>
+  );
 }
-
-// '2026-10-05' -> '05/10/2026'; '18:00:00' -> '18:00'
-const fechaLegible = (iso) => iso.split('-').reverse().join('/');
-const horaLegible = (h) => h.slice(0, 5);
-
-// Hora de la marca (fecha completa del servidor) mostrada en hora de La Paz.
-const horaMarca = (iso) =>
-  new Date(iso).toLocaleTimeString('es-BO', {
-    timeZone: 'America/La_Paz',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-const ESTADOS = {
-  PRESENTE: { texto: 'Presente', clase: 'etiqueta activa' },
-  FALTA: { texto: 'Falta', clase: 'etiqueta falta' },
-  PENDIENTE: { texto: 'Hoy', clase: 'etiqueta hoy' },
-  PROXIMA: { texto: 'Próxima', clase: 'etiqueta' },
-};
 
 // Inicio del estudiante: marcar asistencia del día (RF-03) e historial
 // personal con resumen (RF-04, RF-05).
 export default function InicioEstudiante() {
   const { usuario } = useAuth();
+  usePageTitle('Mi asistencia');
   const [estadoHoy, setEstadoHoy] = useState(null);
   const [historial, setHistorial] = useState(null);
   const [marcando, setMarcando] = useState(false);
-  const [error, setError] = useState('');
-  const [aviso, setAviso] = useState('');
+  const [fallo, setFallo] = useState(false);
 
   async function cargar() {
     try {
@@ -44,7 +65,8 @@ export default function InicioEstudiante() {
       setEstadoHoy(hoy.data);
       setHistorial(hist.data);
     } catch (e) {
-      setError(mensajeDe(e, 'No se pudo cargar tu asistencia'));
+      setFallo(true);
+      toast.error(mensajeDe(e, 'No se pudo cargar tu asistencia'));
     }
   }
 
@@ -53,15 +75,13 @@ export default function InicioEstudiante() {
   }, []);
 
   async function marcar() {
-    setError('');
-    setAviso('');
     setMarcando(true);
     try {
-      const res = await client.post('/asistencia/marcar');
-      setAviso(res.data.detalle);
+      await client.post('/asistencia/marcar');
+      toast.success('Asistencia registrada');
       await cargar();
     } catch (e) {
-      setError(mensajeDe(e, 'No se pudo registrar tu asistencia'));
+      toast.error(mensajeDe(e, 'No se pudo registrar tu asistencia'));
       await cargar();
     } finally {
       setMarcando(false);
@@ -70,100 +90,116 @@ export default function InicioEstudiante() {
 
   const sesion = estadoHoy?.sesion;
   const marca = estadoHoy?.asistencia;
+  const hoy = estadoHoy?.fecha || hoyLaPaz();
+  const proxima = historial?.fechas.find((f) => f.fecha > hoy);
+  const resumen = historial?.resumen;
+  const pct = resumen ? porcentaje(resumen.presentes, resumen.faltas) : null;
+  const restantes = historial ? historial.fechas.filter((f) => f.fecha >= hoy && f.estado !== 'PRESENTE' && f.estado !== 'FALTA').length : 0;
 
-  return (
-    <div className="pagina">
-      <div className="tarjeta bienvenida">
-        <h2>Hola, {usuario?.nombre}</h2>
-        <p>Bienvenido/a al sistema de control de asistencia.</p>
-        {usuario?.codigo && (
-          <p className="dato">Número de registro: {usuario.codigo}</p>
-        )}
-
-        {error && <p className="error">{error}</p>}
-        {aviso && <p className="exito">{aviso}</p>}
-
-        {!estadoHoy ? (
-          !error && <p className="nota">Cargando…</p>
-        ) : (
-          <>
-            {sesion && (
-              <p className="dato">
-                📅 Clase de hoy: {fechaLegible(sesion.fecha)} ·{' '}
-                {horaLegible(sesion.hora_inicio)}–{horaLegible(sesion.hora_fin)}
-              </p>
-            )}
-            {marca ? (
-              <p className="exito">
-                {marca.estado === 'PRESENTE'
-                  ? `✅ Marcaste asistencia a las ${horaMarca(marca.hora_registro)}`
-                  : 'Tu asistencia de hoy figura como Falta'}
-              </p>
-            ) : (
-              <>
-                <button
-                  className="btn btn-principal"
-                  onClick={marcar}
-                  disabled={!estadoHoy.puedeMarcar || marcando}
-                >
-                  {marcando ? 'Registrando…' : 'Marcar asistencia'}
-                </button>
-                {estadoHoy.motivo && <p className="nota">{estadoHoy.motivo}</p>}
-              </>
-            )}
-          </>
-        )}
-      </div>
-
-      {historial && (
-        <div className="tarjeta historial">
-          <h3>Mi historial</h3>
-          <div className="resumen">
-            <span>
-              Presentes: <strong>{historial.resumen.presentes}</strong>
-            </span>
-            <span>
-              Faltas: <strong>{historial.resumen.faltas}</strong>
-            </span>
-            <span>
-              Pendientes: <strong>{historial.resumen.pendientes}</strong>
+  function claseHoy() {
+    if (!estadoHoy) return null;
+    if (sesion && marca) {
+      return (
+        <div className="card clase-hoy marcada">
+          <div className="clase-hoy-cuerpo">
+            <div className="marcada-linea">
+              <CheckCircle2 size={28} aria-hidden="true" />
+              {marca.estado === 'PRESENTE'
+                ? `Asistencia registrada a las ${horaMarca(marca.hora_registro)}`
+                : 'Tu asistencia de hoy figura como Falta'}
+            </div>
+            <span className="texto-muted">
+              Clase de hoy · {horaLegible(sesion.hora_inicio)} – {horaLegible(sesion.hora_fin)}
             </span>
           </div>
-
-          {historial.fechas.length === 0 ? (
-            <p className="nota">Todavía no hay fechas de clase en el módulo.</p>
-          ) : (
-            <div className="tabla-contenedor">
-              <table className="tabla">
-                <thead>
-                  <tr>
-                    <th>Fecha</th>
-                    <th>Horario</th>
-                    <th>Estado</th>
-                    <th>Hora de marca</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {historial.fechas.map((f) => (
-                    <tr key={f.id}>
-                      <td>{fechaLegible(f.fecha)}</td>
-                      <td>
-                        {horaLegible(f.hora_inicio)}–{horaLegible(f.hora_fin)}
-                      </td>
-                      <td>
-                        <span className={ESTADOS[f.estado].clase}>
-                          {ESTADOS[f.estado].texto}
-                        </span>
-                      </td>
-                      <td>{f.hora_registro ? horaMarca(f.hora_registro) : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
-      )}
-    </div>
+      );
+    }
+    if (sesion) {
+      return (
+        <Card title="Clase de hoy" className="clase-hoy" actions={<StatusBadge estado="PENDIENTE" />}>
+          <div className="clase-hoy-cuerpo">
+            <div className="horario-grande">
+              {horaLegible(sesion.hora_inicio)} – {horaLegible(sesion.hora_fin)}
+            </div>
+            <p className="texto-muted">Puedes marcar hasta las 23:59 de hoy</p>
+            {estadoHoy.puedeMarcar && (
+              <Button size="lg" icon={Check} loading={marcando} onClick={marcar}>
+                Marcar asistencia
+              </Button>
+            )}
+            {!estadoHoy.puedeMarcar && estadoHoy.motivo && <p className="texto-muted">{estadoHoy.motivo}</p>}
+          </div>
+        </Card>
+      );
+    }
+    return (
+      <Card title="Clase de hoy" className="clase-hoy">
+        <EmptyState
+          icon={CalendarDays}
+          title="Hoy no hay clase"
+          text={
+            proxima
+              ? `Tu próxima clase es el ${diaNombre(proxima.fecha)}, ${horaLegible(proxima.hora_inicio)}`
+              : 'No hay más clases programadas en este módulo.'
+          }
+        />
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <div>
+        <p className="fecha-larga">{fechaLarga(hoy)}</p>
+        <h2 className="saludo">Hola, {usuario?.nombre}</h2>
+      </div>
+
+      <div className="est-grid">
+        {!estadoHoy ? (
+          <Card title="Clase de hoy">{fallo ? <EmptyState title="No se pudo cargar" /> : <Skeleton filas={3} />}</Card>
+        ) : (
+          claseHoy()
+        )}
+
+        <Card title="Tu asistencia">
+          {!historial ? (
+            <Skeleton filas={5} />
+          ) : (
+            <>
+              <div className="anillo-wrap">
+                <Anillo valor={pct} />
+                <div className="totales">
+                  <div>
+                    <strong>{resumen.presentes}</strong>Presentes
+                  </div>
+                  <div className="bad">
+                    <strong>{resumen.faltas}</strong>Faltas
+                  </div>
+                  <div>
+                    <strong>{restantes}</strong>Restantes
+                  </div>
+                </div>
+              </div>
+              {historial.fechas.length === 0 ? (
+                <EmptyState icon={CalendarDays} title="Sin fechas" text="Todavía no hay fechas de clase en el módulo." />
+              ) : (
+                <ul className="lista-fechas">
+                  {historial.fechas.map((f) => (
+                    <li key={f.id}>
+                      <div>
+                        {diaCorto(f.fecha)}
+                        <small>{f.hora_registro ? `Marcó a las ${horaMarca(f.hora_registro)}` : 'Sin marca'}</small>
+                      </div>
+                      <StatusBadge estado={f.estado} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </Card>
+      </div>
+    </>
   );
 }

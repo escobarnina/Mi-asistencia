@@ -7,7 +7,7 @@ export default function ProtectedRoute({ rol, children }) {
   const { usuario, cargando } = useAuth();
 
   if (cargando) {
-    return <div className="centro">Cargando…</div>;
+    return <div className="pad" aria-busy="true"><div className="skeleton" style={{ width: "40%" }} /></div>;
   }
   if (!usuario) {
     return <Navigate to="/login" replace />;
