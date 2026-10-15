@@ -1,5 +1,5 @@
-import { Outlet, useNavigate } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { CalendarDays, Home, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Avatar, Button, Logo } from '../components/ui';
 
@@ -15,7 +15,17 @@ export default function StudentLayout() {
   return (
     <div>
       <header className="est-top">
-        <Logo />
+        <div className="est-top-izq">
+          <Logo />
+          <nav className="est-tabs" aria-label="Secciones del estudiante">
+            <NavLink to="/estudiante" end>
+              <Home size={20} aria-hidden="true" /> Hoy
+            </NavLink>
+            <NavLink to="/estudiante/calendario">
+              <CalendarDays size={20} aria-hidden="true" /> Mi calendario
+            </NavLink>
+          </nav>
+        </div>
         <div className="est-quien">
           <div>
             {usuario?.nombre}
