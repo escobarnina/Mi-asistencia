@@ -3,7 +3,7 @@
 // automáticamente el módulo activo (si no se indica otro).
 // listar(...) devuelve el historial del módulo activo para el administrador.
 const { Op } = require('sequelize');
-const { Actividad, Modulo, Usuario } = require('../models');
+const { Actividad, Modulo, Usuario, Asistencia, SesionClase, Importacion } = require('../models');
 const { errorHttp } = require('../core/errors');
 const env = require('../config/env');
 
@@ -67,6 +67,73 @@ function rangoDeFechas({ fecha, desde, hasta }) {
 // Escapa \, % y _ para que el texto buscado se tome literalmente en un LIKE.
 const textoLike = (texto) => texto.replace(/[\\%_]/g, '\\$&');
 
+// RF-09: texto legible del registro afectado por cada actividad, a partir de los campos que
+// ya guarda la tabla (entidad, entidad_id y detalle). Devuelve un Map id de actividad -> texto
+// (null si la acción no afecta a un registro, como LOGIN o LOGOUT). Consulta por lotes.
+const diaMes = (iso) => (iso ? iso.split('-').reverse().slice(0, 2).join('/') : '');
+const fechaLarga = (iso) => (iso ? iso.split('-').reverse().join('/') : '');
+const estadoTexto = (e) => (e ? e.charAt(0) + e.slice(1).toLowerCase() : e);
+
+async function describirRegistros(actividades) {
+  const ids = (entidad) => [
+    ...new Set(
+      actividades
+        .filter((a) => a.entidad && a.entidad.toLowerCase() === entidad && a.entidad_id)
+        .map((a) => a.entidad_id)
+    ),
+  ];
+
+  const [asistencias, importaciones, modulos, usuarios, sesiones] = await Promise.all([
+    Asistencia.findAll({
+      where: { id: ids('asistencia') },
+      include: [
+        { model: SesionClase, as: 'sesion', attributes: ['fecha'] },
+        { model: Usuario, as: 'estudiante', attributes: ['nombre'] },
+      ],
+    }),
+    Importacion.findAll({ where: { id: ids('importacion') }, attributes: ['id', 'archivo'] }),
+    Modulo.findAll({ where: { id: ids('modulo') }, attributes: ['id', 'nombre', 'gestion'] }),
+    Usuario.findAll({ where: { id: ids('inscripcion') }, attributes: ['id', 'nombre', 'codigo'] }),
+    SesionClase.findAll({ where: { id: ids('sesion_clase') }, attributes: ['id', 'fecha'] }),
+  ]);
+  const porId = (lista) => new Map(lista.map((x) => [x.id, x]));
+  const mAsis = porId(asistencias);
+  const mImp = porId(importaciones);
+  const mMod = porId(modulos);
+  const mUsu = porId(usuarios);
+  const mSes = porId(sesiones);
+
+  const textos = new Map();
+  for (const a of actividades) {
+    const entidad = a.entidad ? a.entidad.toLowerCase() : null;
+    let texto = null;
+    if (entidad === 'asistencia' && a.entidad_id) {
+      const asis = mAsis.get(a.entidad_id);
+      if (asis) {
+        texto = `Asistencia de ${asis.estudiante.nombre} · ${diaMes(asis.sesion.fecha)}`;
+        const cambio = a.accion === 'MODIFICAR_ASISTENCIA' && /^([A-Z]+) → ([A-Z]+)[.]/.exec(a.detalle || '');
+        if (cambio) texto += `: ${estadoTexto(cambio[1])} → ${estadoTexto(cambio[2])}`;
+      } else {
+        texto = `Asistencia #${a.entidad_id}`;
+      }
+    } else if (entidad === 'importacion' && a.entidad_id) {
+      const imp = mImp.get(a.entidad_id);
+      texto = `Importación #${a.entidad_id}${imp ? ` (${imp.archivo})` : ''}`;
+    } else if (entidad === 'modulo' && a.entidad_id) {
+      const mod = mMod.get(a.entidad_id);
+      texto = mod ? `Módulo ${mod.nombre}${mod.gestion ? ` (${mod.gestion})` : ''}` : `Módulo #${a.entidad_id}`;
+    } else if (entidad === 'inscripcion' && a.entidad_id) {
+      const u = mUsu.get(a.entidad_id);
+      texto = u ? `${u.nombre} (${u.codigo})` : `Estudiante #${a.entidad_id}`;
+    } else if (entidad === 'sesion_clase') {
+      const s = a.entidad_id && mSes.get(a.entidad_id);
+      texto = s ? `Clase del ${fechaLarga(s.fecha)}` : a.entidad_id ? `Clase #${a.entidad_id}` : 'Varias fechas de clase';
+    }
+    textos.set(a.id, texto);
+  }
+  return textos;
+}
+
 // RF-10: historial de acciones del MÓDULO ACTIVO. Filtros opcionales:
 //   estudiante  nombre o número de registro (contiene)
 //   fecha       un día 'AAAA-MM-DD' (día de La Paz); o desde / hasta (rango de días)
@@ -126,13 +193,16 @@ async function listar({
     offset: (page - 1) * limit,
   });
 
+  const textos = await describirRegistros(rows);
+
   return {
     modulo: { id: modulo.id, nombre: modulo.nombre, gestion: modulo.gestion },
     total: count,
     pagina: page,
     limite: limit,
     totalPaginas: Math.ceil(count / limit) || 1,
-    actividades: rows,
+    // Se conservan todos los campos actuales y se suma `registro_afectado` (texto legible).
+    actividades: rows.map((r) => ({ ...r.get({ plain: true }), registro_afectado: textos.get(r.id) ?? null })),
   };
 }
 

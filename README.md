@@ -166,13 +166,13 @@ vuelva a correr agrega las tres fechas de ese día sin duplicar.
 |---|---|---|
 | RF-01 | Ingreso de estudiantes (correo o registro, solo inscritos del módulo activo, error si no) | `POST /api/auth/login` · pantalla `/login` · `authService.js` |
 | RF-02 | Acceso del administrador, funciones restringidas, cerrar sesión | `POST /api/auth/login` y `/logout` · middleware `requireAdmin` · barra superior |
-| RF-03 | Registrar asistencia (botón, fecha y hora reales, una marca por fecha, deshabilitado fuera de fecha) | `POST /api/asistencia/marcar`, `GET /api/asistencia/hoy` · `/estudiante` |
+| RF-03 | Registrar asistencia (botón, fecha y hora reales, una marca por fecha, deshabilitado fuera de fecha) | `POST /api/asistencia/marcar`, `GET /api/asistencia/hoy` · `/estudiante` (sin clase hoy el botón se ve deshabilitado) |
 | RF-04 | Faltas: fecha pasada sin marca = Falta; solo el admin corrige | `services/estadoAsistencia.js` (regla única) · `/estudiante` y `/admin/asistencias` |
 | RF-05 | Historial personal con hora de la marca y resumen | `GET /api/asistencia/mis-asistencias` · `/estudiante` |
 | RF-06 | Lista de estudiantes del módulo activo con búsqueda | `GET /api/admin/estudiantes?q=` · `/admin/estudiantes` |
 | RF-07 | Modificar asistencias con registro de cambios (usuario, fecha, hora, anterior y nuevo) | `PUT /api/admin/asistencias/:sesionId/:estudianteId` · `/admin/asistencias` · tabla `asistencia_cambio` |
 | RF-08 | Vista general de asistencias con filtros y totales | `GET /api/admin/asistencias` · `/admin/asistencias` |
-| RF-09 | Registro de actividades (usuario, acción, fecha y hora, registro afectado) | `ActividadService.registrar(...)` · tabla `actividad` |
+| RF-09 | Registro de actividades (usuario, acción, fecha y hora, registro afectado) | `ActividadService.registrar(...)` · tabla `actividad` · `GET /api/actividades` devuelve `registro_afectado` (texto legible) · columna en `/admin/actividades` |
 | RF-10 | Consulta de actividades del módulo activo, filtros por estudiante o fecha, solo admin | `GET /api/actividades` · `/admin/actividades` |
 | RF-11 | Importar estudiantes desde Excel (obligatorios, duplicados, errores por fila) | `POST /api/importacion/estudiantes` · `/admin/modulos/:id/datos` y `/admin/estudiantes` |
 | RF-12 | Importar fechas y horarios (la marca se permite todo el día de clase) | `POST /api/importacion/fechas` · `asistenciaService.js` |
@@ -220,8 +220,8 @@ alcance, como indica el documento de requisitos.
 ## Pruebas automáticas
 
 Los tests (Jest + supertest) usan una base aparte, `asistencia_test`, en el **mismo MySQL** (se
-crea sola). Hay 9 suites: autenticación, módulos, activación de un módulo nuevo, importación,
-asistencia del estudiante, panel admin, actividades y gestión editable de módulos (9 suites, 131 pruebas).
+crea sola). Hay 10 suites: autenticación, módulos, activación de un módulo nuevo, importación,
+asistencia del estudiante, panel admin, actividades y gestión editable de módulos (10 suites, 136 pruebas).
 
 ```bash
 # Con la base levantada (docker compose up -d db). Desde tu máquina el host es localhost:

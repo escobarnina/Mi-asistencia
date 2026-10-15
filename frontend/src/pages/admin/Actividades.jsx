@@ -153,6 +153,7 @@ export default function Actividades() {
                 titulo: 'Usuario',
                 render: (a) => (a.Usuario ? <Persona nombre={a.Usuario.nombre} /> : <span className="texto-muted">Sistema</span>),
               },
+              { titulo: 'Registro afectado', render: (a) => a.registro_afectado || '—' },
               { titulo: 'Detalle', className: 'gris', render: (a) => a.detalle || '—' },
               { titulo: 'IP', className: 'mono', render: (a) => a.ip || '—' },
             ]}
