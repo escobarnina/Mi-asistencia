@@ -267,9 +267,9 @@ export default function Estudiantes() {
         </p>
       )}
 
+      <ListaEstudiantes recarga={recarga} />
       <ImportarExcel config={ESTUDIANTES} hayModulo={!!modulo} onImportado={() => setRecarga((n) => n + 1)} />
       <ImportarExcel config={FECHAS} hayModulo={!!modulo} />
-      <ListaEstudiantes recarga={recarga} />
     </>
   );
 }

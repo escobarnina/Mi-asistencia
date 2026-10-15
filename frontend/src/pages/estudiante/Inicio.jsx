@@ -25,17 +25,19 @@ function Anillo({ valor }) {
     <div className="anillo">
       <svg viewBox="0 0 100 100" width="96" height="96" aria-hidden="true">
         <circle cx="50" cy="50" r={r} fill="none" stroke="var(--next-bg)" strokeWidth="10" />
-        <circle
-          cx="50"
-          cy="50"
-          r={r}
-          fill="none"
-          stroke="var(--primary)"
-          strokeWidth="10"
-          strokeLinecap="round"
-          strokeDasharray={`${lleno} ${c}`}
-          transform="rotate(-90 50 50)"
-        />
+        {lleno > 0 && (
+          <circle
+            cx="50"
+            cy="50"
+            r={r}
+            fill="none"
+            stroke="var(--primary)"
+            strokeWidth="10"
+            strokeLinecap="round"
+            strokeDasharray={`${lleno} ${c}`}
+            transform="rotate(-90 50 50)"
+          />
+        )}
       </svg>
       <span aria-label={valor === null ? 'Sin datos' : `${valor}% de asistencia`}>
         {valor === null ? '—' : `${valor}%`}
