@@ -7,5 +7,6 @@ terraform {
     region         = "us-east-1"
     dynamodb_table = "asistencia-tfstate-locks"
     encrypt        = true
+    role_arn       = "arn:aws:iam::168692730615:role/RolTerraformColaborador"
   }
 }

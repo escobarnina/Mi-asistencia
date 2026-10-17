@@ -24,8 +24,11 @@ terraform {
 
 provider "aws" {
   region = var.region
-  # Las credenciales se toman de "aws configure" (~/.aws/credentials).
-  # Nunca escribas tu Access Key aquí.
+
+  assume_role {
+    role_arn     = "arn:aws:iam::168692730615:role/RolTerraformColaborador"
+    session_name = "SesionColaboradorTerraform"
+  }
 
   default_tags {
     tags = {
@@ -34,3 +37,4 @@ provider "aws" {
     }
   }
 }
+
