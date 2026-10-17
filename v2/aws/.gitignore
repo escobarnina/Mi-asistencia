@@ -1,0 +1,21 @@
+# Archivos de estado local (el estado real reside en S3)
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Llaves privadas SSH (NUNCA subir a GitHub)
+*.pem
+*.key
+id_rsa*
+
+# Variables con credenciales y contraseñas (usa terraform.tfvars.example como guía)
+*.tfvars
+*.tfvars.json
+
+# Directorios de trabajo de Terraform / OpenTofu
+.terraform/
+.tofu/
+
+# Archivos de bloqueo de crash
+*.tflock
+*.tflock.hcl

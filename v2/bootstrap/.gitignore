@@ -1,0 +1,20 @@
+# Archivos de estado local generados por el bootstrap
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Variables locales con secretos
+*.tfvars
+*.tfvars.json
+
+# Llaves privadas SSH si se generaran
+*.pem
+*.key
+
+# Directorios de trabajo de Terraform / OpenTofu
+.terraform/
+.tofu/
+
+# Archivos de bloqueo de crash
+*.tflock
+*.tflock.hcl
