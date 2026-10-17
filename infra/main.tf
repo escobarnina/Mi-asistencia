@@ -48,7 +48,7 @@ resource "aws_key_pair" "ssh" {
 resource "local_sensitive_file" "llave_pem" {
   content         = tls_private_key.ssh.private_key_openssh
   filename        = "${path.module}/${var.proyecto}-llave.pem"
-  file_permission = "0400"
+  file_permission = "0600"
 }
 
 # ---------- Secretos generados (no hace falta inventarlos) ----------
