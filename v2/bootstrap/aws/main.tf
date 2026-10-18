@@ -12,10 +12,10 @@ resource "random_string" "sufijo" {
 # 1. Bucket S3 para almacenar el .tfstate
 resource "aws_s3_bucket" "tfstate" {
   bucket        = "${var.proyecto}-tfstate-${random_string.sufijo.result}"
-  force_destroy = false
+  force_destroy = true #Cambiar a true para vaciar los archivos dentro del bucket S3
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false #Cambiar a false para poder borrar el bucket S3
   }
 }
 

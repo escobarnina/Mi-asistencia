@@ -1,4 +1,0 @@
-bucket         = "nombre del bucket"
-region         = "nombre de la region"
-dynamodb_table = "nombre de la tabla"
-role_arn       = "nombre del rol"
