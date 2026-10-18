@@ -75,7 +75,11 @@ ec2_instance = aws.ec2.Instance(
     instance_type=instance_type,
     ami=ubuntu_ami.id,
     vpc_security_group_ids=[sec_group.id],
+    associate_public_ip_address=True,
     user_data=user_data_script,
+    # Si cambia el script, se recrea la VM limpia. Sin esto, AWS solo la
+    # reinicia, NO vuelve a ejecutar el script y le cambia la IP publica.
+    user_data_replace_on_change=True,
     tags={
         "Name": instance_name,
         "ManagedBy": "Pulumi"
@@ -86,3 +90,4 @@ ec2_instance = aws.ec2.Instance(
 pulumi.export("instance_id", ec2_instance.id)
 pulumi.export("public_ip", ec2_instance.public_ip)
 pulumi.export("public_dns", ec2_instance.public_dns)
+pulumi.export("url", ec2_instance.public_ip.apply(lambda ip: f"http://{ip}"))
