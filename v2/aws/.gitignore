@@ -19,4 +19,6 @@ id_rsa*
 # Archivos de bloqueo de crash
 *.tflock
 *.tflock.hcl
-*.hcl
+# Configuracion local opcional del backend. Ojo: NO usar *.hcl, porque
+# ignoraria .terraform.lock.hcl, que SI debe subirse.
+backend.hcl

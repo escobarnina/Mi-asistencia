@@ -48,7 +48,7 @@ resource "aws_key_pair" "ssh" {
 resource "local_sensitive_file" "llave_pem" {
   content         = tls_private_key.ssh.private_key_openssh
   filename        = "${path.module}/${var.proyecto}-llave.pem"
-  file_permission = "0400"
+  file_permission = "0600" # 0400 en Windows deja el .pem de solo lectura y el siguiente apply falla
 }
 
 # ---------- Secretos generados (no hace falta inventarlos) ----------
@@ -96,19 +96,25 @@ resource "aws_security_group" "backend" {
   description = "Backend: API 8000 y SSH. MySQL NO se expone."
   vpc_id      = data.aws_vpc.default.id
 
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.mi_ip]
-  }
+  # Sin bloques ingress aqui: todas las reglas de entrada del backend son
+  # recursos aws_vpc_security_group_ingress_rule. Mezclar ingress inline con
+  # reglas separadas hace que cada apply borre y recree las reglas del 8000.
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+}
+
+# SSH al backend (regla separada: no mezclar con ingress inline)
+resource "aws_vpc_security_group_ingress_rule" "ssh_backend" {
+  security_group_id = aws_security_group.backend.id
+  description       = "SSH"
+  ip_protocol       = "tcp"
+  from_port         = 22
+  to_port           = 22
+  cidr_ipv4         = var.mi_ip
 }
 
 # API abierta a internet (backend "publicado")
