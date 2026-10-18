@@ -7,3 +7,4 @@ mi_ip          = "0.0.0.0/0"
 admin_password = "Asistencia-2026"
 cargar_semilla = true
 crear_frontend = false
+role_arn = "arn:aws:iam::acoud:role/RolTerraformColaborador"

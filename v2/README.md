@@ -37,7 +37,7 @@ Crea la infraestructura de soporte para el estado remoto:
 - **Tabla DynamoDB:** Gestiona el *State Locking* para evitar modificaciones simultáneas entre compañeros de equipo.
 
 ```bash
-cd v3/bootstrap/aws
+cd v2/bootstrap/aws
 tofu init
 tofu apply
 ```
@@ -50,7 +50,7 @@ Despliega la aplicación completa consultando y sincronizando el estado directam
 
 1. Configura tus variables a partir de la plantilla:
    ```bash
-   cd v3/aws
+   cd v2/aws
    cp terraform.tfvars.example terraform.tfvars
    ```
 2. Inicializa y aplica:
@@ -70,7 +70,7 @@ Despliega una única instancia EC2 en AWS utilizando Infrastructure as Code nati
 
 1. Entra a la carpeta y activa el entorno virtual:
    ```bash
-   cd v3/pulumi
+   cd v2/pulumi
    python -m venv venv
    .\venv\Scripts\Activate.ps1
    pip install -r requirements.txt

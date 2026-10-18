@@ -73,3 +73,8 @@ variable "backend_publico" {
   type        = bool
   default     = true
 }
+variable "role_arn" {
+  description = "ARN del rol a asumir en la cuenta central (se define en terraform.tfvars)"
+  type        = string
+  default     = ""
+}

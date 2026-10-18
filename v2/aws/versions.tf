@@ -25,9 +25,12 @@ terraform {
 provider "aws" {
   region = var.region
 
-  assume_role {
-    role_arn     = "arn:aws:iam::168692730615:role/RolTerraformColaborador"
-    session_name = "SesionColaboradorTerraform"
+  dynamic "assume_role" {
+    for_each = var.role_arn != "" ? [1] : []
+    content {
+      role_arn     = var.role_arn
+      session_name = "SesionColaborador"
+    }
   }
 
   default_tags {
