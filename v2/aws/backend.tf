@@ -2,7 +2,7 @@
 # Valores copiados del "terraform output" al ejecutar v2/bootstrap/aws.
 terraform {
   backend "s3" {
-    bucket         = "asistencia-tfstate-gqqauiyp"
+    bucket         = "asistencia-tfstate-bkzoflx8"
     key            = "mi-asistencia/dev/terraform.tfstate"
     region         = "us-east-1"
     dynamodb_table = "asistencia-tfstate-locks"
