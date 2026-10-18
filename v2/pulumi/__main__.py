@@ -60,19 +60,29 @@ sec_group = aws.ec2.SecurityGroup(
     }
 )
 
-# 4. Creación de la instancia EC2
+# 4. Script de inicialización (User Data) para servidor web Apache
+user_data_script = """#!/bin/bash
+sudo apt update -y
+sudo apt install -y apache2
+sudo systemctl start apache2
+sudo systemctl enable apache2
+echo "<h1>Hola desde mi EC2 desplegada con Pulumi!</h1>" | sudo tee /var/www/html/index.html
+"""
+
+# 5. Creación de la instancia EC2
 ec2_instance = aws.ec2.Instance(
     instance_name,
     instance_type=instance_type,
     ami=ubuntu_ami.id,
     vpc_security_group_ids=[sec_group.id],
+    user_data=user_data_script,
     tags={
         "Name": instance_name,
         "ManagedBy": "Pulumi"
     }
 )
 
-# 5. Exportar datos útiles
+# 6. Exportar datos útiles
 pulumi.export("instance_id", ec2_instance.id)
 pulumi.export("public_ip", ec2_instance.public_ip)
 pulumi.export("public_dns", ec2_instance.public_dns)

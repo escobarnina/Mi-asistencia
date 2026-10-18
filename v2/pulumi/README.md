@@ -35,7 +35,7 @@ v2/pulumi/
 
 1. **Entrar a la carpeta:**
    ```bash
-   cd v3/pulumi
+   cd v2/pulumi
    ```
 
 2. **Crear y activar el entorno virtual de Python:**
@@ -55,12 +55,34 @@ v2/pulumi/
    pip install -r requirements.txt
    ```
 
-4. **Seleccionar o inicializar el stack de Pulumi:**
+4. **Inicio de sesión en Pulumi (`pulumi login`):**
+   - **¿Cuándo usarlo?**
+     Debes usar `pulumi login` la primera vez que configuras tu entorno o cuando cambias de máquina/backend para que Pulumi sepa dónde almacenar el estado de tu infraestructura.
+   - **Opciones de almacenamiento:**
+     - **Pulumi Cloud (por defecto):**
+       ```bash
+       pulumi login
+       ```
+       Inicia sesión en el servicio administrado de Pulumi (requiere cuenta en pulumi.com).
+     - **Almacenamiento local (sin cuenta en la nube):**
+       ```bash
+       pulumi login --local
+       ```
+       Guarda el estado en tu propio disco local (`~/.pulumi`).
+     - **En un bucket de AWS S3:**
+       ```bash
+       pulumi login s3://mi-bucket-de-estado
+       ```
+
+5. **Seleccionar o crear el stack:**
    ```bash
    pulumi stack select dev --create
    ```
+   - **¿Qué significa este comando?**
+     - `pulumi stack select dev`: Le indica a Pulumi que active y trabaje sobre el stack/ambiente llamado `dev` (desarrollo). En Pulumi, un *stack* es una instancia aislada e independiente de tu infraestructura (por ejemplo: `dev`, `staging`, `prod`).
+     - `--create`: Es una bandera opcional que le indica a Pulumi: *"si el stack `dev` no existe todavía, créalo automáticamente en lugar de arrojar un error"*. Si el stack ya existe, simplemente lo selecciona.
 
-5. **Previsualizar y desplegar:**
+6. **Previsualizar y desplegar:**
    ```bash
    # Ver qué recursos se crearán
    pulumi preview
@@ -69,7 +91,21 @@ v2/pulumi/
    pulumi up
    ```
 
-6. **Destruir los recursos cuando ya no los necesites:**
+7. **Destruir los recursos cuando ya no los necesites:**
    ```bash
    pulumi destroy
    ```
+
+---
+
+## Comandos útiles adicionales
+
+### Sincronizar el estado real con `pulumi refresh`
+```bash
+pulumi refresh
+```
+
+**¿Cuándo usarlo?**
+- **Recursos modificados o eliminados fuera de Pulumi:** Si alguien apagó, modificó o eliminó una instancia EC2 u otro recurso directamente desde la consola web de AWS (o por CLI de AWS), el estado guardado en Pulumi quedará desincronizado con la realidad de la nube.
+- **Error `Resource provider reported that the resource did not exist while updating`:** Ocurre durante un `pulumi up` cuando Pulumi intenta actualizar un recurso que ya no existe físicamente en AWS.
+- **Solución:** Al ejecutar `pulumi refresh`, Pulumi consulta directamente a AWS, compara lo que realmente existe contra su archivo de estado y te da la opción de actualizar su estado local/remoto para reflejar la realidad antes de volver a correr `pulumi up`.

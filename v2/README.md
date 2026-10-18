@@ -72,6 +72,8 @@ Cada colaborador (o quien despliegue) debe asegurarse de que [`v2/aws/backend.tf
 | `encrypt` | Cifrado obligatorio en reposo | `true` |
 | `role_arn` | Output `role_arn` de `v2/bootstrap/aws` (permite que colaboradores asuman el rol de la cuenta central) | `"arn:aws:iam::168692730615:role/RolTerraformColaborador"` |
 
+> **Nota sobre `role_arn`:** El ARN del rol **SIEMPRE debe llevar el Account ID de la cuenta central/creador** (en este ejemplo `168692730615`). Los colaboradores externos **NO deben cambiar ese número** por su propia cuenta, porque el rol y los recursos residen en la cuenta central.
+
 Ejemplo completo de [`v2/aws/backend.tf`](backend.tf):
 
 ```hcl
@@ -113,7 +115,49 @@ terraform {
 
 ---
 
-## 3. Módulo `v2/pulumi` (Despliegue con Python)
+## 3. Guía de Destrucción (`tofu destroy`) y Permisos
+
+Para apagar recursos y evitar costos cuando el proyecto no esté en uso, existen dos niveles de borrado:
+
+### A. Destruir la aplicación (`v2/aws`)
+
+- **¿Qué borra?** Las máquinas virtuales EC2 (backend, frontend), Security Groups, pares de llaves y reglas de red.
+- **¿Quién puede ejecutarlo?** **CUALQUIERA** de los miembros del equipo: tanto el **creador** de la cuenta central como **cualquier colaborador externo** autorizado mediante el `assume_role`.
+- **Comando:**
+  ```bash
+  cd v2/aws
+  tofu destroy
+  ```
+- **Resultado:** Las máquinas se apagan y eliminan en AWS. El archivo `.tfstate` remoto en S3 se actualiza automáticamente indicando que ya no hay recursos activos. El bucket S3 y DynamoDB **siguen existiendo** para futuros despliegues.
+
+---
+
+### B. Destruir la infraestructura base (`v2/bootstrap/aws`)
+
+- **¿Qué borra?** El Bucket S3 que almacena el `.tfstate`, la tabla DynamoDB de locks y el Rol IAM `RolTerraformColaborador`.
+- **¿Quién puede ejecutarlo?** **ÚNICAMENTE EL CREADOR / DUEÑO** de la cuenta central (`168692730615`) desde su propia máquina y con sus credenciales directas.
+  > ⚠️ **Los colaboradores externos NO pueden borrar el bootstrap:** Dará error `403 AccessDenied` porque el estado de bootstrap es puramente local de la cuenta dueña y ningún colaborador tiene propiedad directa sobre el bucket base.
+- **Pasos para destruirlo (si se requiere eliminar todo por completo):**
+  1. En [`v2/bootstrap/aws/main.tf`](bootstrap/aws/main.tf), cambiar el candado de seguridad a `false`:
+     ```hcl
+     resource "aws_s3_bucket" "tfstate" {
+       bucket        = var.nombre_bucket
+       force_destroy = true    # Vacía los archivos dentro del bucket
+
+       lifecycle {
+         prevent_destroy = false  # Permite que se pueda destruir
+       }
+     }
+     ```
+  2. Ejecutar desde la cuenta dueña:
+     ```bash
+     cd v2/bootstrap/aws
+     tofu destroy
+     ```
+
+---
+
+## 4. Módulo `v2/pulumi` (Despliegue con Python)
 
 Despliega una única instancia EC2 en AWS utilizando Infrastructure as Code nativa en Python con Pulumi:
 
@@ -128,4 +172,8 @@ Despliega una única instancia EC2 en AWS utilizando Infrastructure as Code nati
    ```bash
    pulumi stack select dev --create
    pulumi up
+   ```
+3. Destruir la instancia de Pulumi:
+   ```bash
+   pulumi destroy
    ```
