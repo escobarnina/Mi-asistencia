@@ -176,6 +176,12 @@ resource "aws_instance" "backend" {
   user_data_replace_on_change = true
 
   tags = { Name = "${var.proyecto}-backend", rol = "backend" }
+
+  lifecycle {
+    ignore_changes = [
+      associate_public_ip_address,
+    ]
+  }
 }
 
 # ---------- VM 2: FRONTEND (nginx) ----------
@@ -202,4 +208,23 @@ resource "aws_instance" "frontend" {
   user_data_replace_on_change = true
 
   tags = { Name = "${var.proyecto}-frontend", rol = "frontend" }
+
+  lifecycle {
+    ignore_changes = [
+      associate_public_ip_address,
+    ]
+  }
 }
+
+# ---------- Forzar estado RUNNING (Enciende las instancias si estan stopped) ----------
+resource "aws_ec2_instance_state" "backend" {
+  instance_id = aws_instance.backend.id
+  state       = "running"
+}
+
+resource "aws_ec2_instance_state" "frontend" {
+  count       = var.crear_frontend ? 1 : 0
+  instance_id = aws_instance.frontend[0].id
+  state       = "running"
+}
+

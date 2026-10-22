@@ -89,3 +89,16 @@ resource "aws_iam_role_policy_attachment" "admin_access" {
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }
 
+# 5. Generar automaticamente backend.hcl para v2/aws
+resource "local_file" "backend_config" {
+  filename = "${path.module}/../../aws/backend.hcl"
+  content  = <<-EOT
+    bucket         = "${aws_s3_bucket.tfstate.bucket}"
+    key            = "mi-asistencia/dev/terraform.tfstate"
+    region         = "${var.region}"
+    dynamodb_table = "${aws_dynamodb_table.tfstate_locks.name}"
+    encrypt        = true
+    role_arn       = "${aws_iam_role.colaborador.arn}"
+  EOT
+}
+
