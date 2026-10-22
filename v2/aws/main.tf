@@ -64,6 +64,8 @@ resource "random_password" "jwt" {
 
 # ---------- Firewalls (Security Groups) ----------
 resource "aws_security_group" "frontend" {
+  #checkov:skip=CKV_AWS_260:Frontend publico intencional para servir aplicacion web via HTTP
+  #checkov:skip=CKV_AWS_382:Salida general requerida para descarga de paquetes y actualizaciones del SO
   count       = var.crear_frontend ? 1 : 0
   name        = "${var.proyecto}-sg-frontend"
   description = "Frontend: HTTP publico y SSH"
@@ -84,6 +86,7 @@ resource "aws_security_group" "frontend" {
     cidr_blocks = [var.mi_ip]
   }
   egress {
+    description = "Permitir salida a internet para paquetes y actualizaciones"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -92,6 +95,7 @@ resource "aws_security_group" "frontend" {
 }
 
 resource "aws_security_group" "backend" {
+  #checkov:skip=CKV_AWS_382:Salida general requerida para descarga de paquetes y dependencias en backend
   name        = "${var.proyecto}-sg-backend"
   description = "Backend: API 8000 y SSH. MySQL NO se expone."
   vpc_id      = data.aws_vpc.default.id
@@ -100,6 +104,7 @@ resource "aws_security_group" "backend" {
   # recursos aws_vpc_security_group_ingress_rule. Mezclar ingress inline con
   # reglas separadas hace que cada apply borre y recree las reglas del 8000.
   egress {
+    description = "Permitir salida a internet para paquetes y actualizaciones"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
@@ -152,12 +157,22 @@ resource "aws_vpc_security_group_ingress_rule" "api_desde_externo" {
 
 # ---------- VM 1: BACKEND + MySQL ----------
 resource "aws_instance" "backend" {
+  #checkov:skip=CKV_AWS_88:Instancia con IP publica directa para simplificar acceso en entorno sin ALB ni NAT
+  #checkov:skip=CKV2_AWS_41:Acceso a backend administrado mediante SSH key pair en este laboratorio
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.tipo_instancia
   subnet_id                   = data.aws_subnets.default.ids[0]
   vpc_security_group_ids      = [aws_security_group.backend.id]
   key_name                    = aws_key_pair.ssh.key_name
   associate_public_ip_address = true
+  ebs_optimized               = true
+  monitoring                  = true
+
+  metadata_options {
+    http_tokens                 = "required"
+    http_endpoint               = "enabled"
+    http_put_response_hop_limit = 1
+  }
 
   root_block_device {
     volume_size = 20 # GB (la capa gratuita cubre hasta 30 GB en total)
@@ -186,6 +201,8 @@ resource "aws_instance" "backend" {
 
 # ---------- VM 2: FRONTEND (nginx) ----------
 resource "aws_instance" "frontend" {
+  #checkov:skip=CKV_AWS_88:Instancia con IP publica directa para servir trafico de usuarios sin ALB
+  #checkov:skip=CKV2_AWS_41:Acceso a frontend administrado mediante SSH key pair en este laboratorio
   count                       = var.crear_frontend ? 1 : 0
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.tipo_instancia
@@ -193,6 +210,14 @@ resource "aws_instance" "frontend" {
   vpc_security_group_ids      = [aws_security_group.frontend[0].id]
   key_name                    = aws_key_pair.ssh.key_name
   associate_public_ip_address = true
+  ebs_optimized               = true
+  monitoring                  = true
+
+  metadata_options {
+    http_tokens                 = "required"
+    http_endpoint               = "enabled"
+    http_put_response_hop_limit = 1
+  }
 
   root_block_device {
     volume_size = 10
