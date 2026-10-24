@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Instancia EC2 simple (Ubuntu 22.04) con Apache, con ambiente a elegir (dev, qa, prod).
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - qa
+      - prod
+    Description: Ambiente de despliegue
+  UbuntuAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id
+
+# Tipo de instancia segun el ambiente
+Mappings:
+  EnvConfig:
+    dev:
+      InstanceType: t3.micro
+    qa:
+      InstanceType: t3.micro
+    prod:
+      InstanceType: t3.migit switch -c feat/cloudfundation maincro
+
+Resources:
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub "Permitir SSH y HTTP (${Environment})"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "asistencia-${Environment}-sg"
+        - Key: Environment
+          Value: !Ref Environment
+
+  Ec2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !FindInMap [EnvConfig, !Ref Environment, InstanceType]
+      ImageId: !Ref UbuntuAmiId
+      SecurityGroupIds:
+        - !GetAtt InstanceSecurityGroup.GroupId
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          apt update -y
+          apt install -y apache2
+          systemctl enable --now apache2
+          echo "<h1>Hola desde EC2 [${Environment}] - Ing. Alfonzo Salgado Flores</h1>" > /var/www/html/index.html
+      Tags:
+        - Key: Name
+          Value: !Sub "asistencia-${Environment}"
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  Environment:
+    Value: !Ref Environment
+  InstanceId:
+    Value: !Ref Ec2Instance
+  PublicIp:
+    Value: !GetAtt Ec2Instance.PublicIp
+  Url:
+    Value: !Sub "http://${Ec2Instance.PublicIp}"

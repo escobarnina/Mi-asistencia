@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Instancia EC2 simple (Ubuntu 22.04) con Apache, usando la VPC por defecto.
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.micro
+  InstanceName:
+    Type: String
+    Default: asistencia-ec2
+  UbuntuAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id
+
+Resources:
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Permitir SSH y HTTP
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  Ec2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref UbuntuAmiId
+      SecurityGroupIds:
+        - !GetAtt InstanceSecurityGroup.GroupId
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          apt update -y
+          apt install -y apache2
+          systemctl enable --now apache2
+          echo "<h1>Hola desde mi EC2[Ing. Alfonzo Salgado Flores] desplegada con CloudFormation!</h1>" > /var/www/html/index.html
+      Tags:
+        - Key: Name
+          Value: !Ref InstanceName
+
+Outputs:
+  InstanceId:
+    Value: !Ref Ec2Instance
+  PublicIp:
+    Value: !GetAtt Ec2Instance.PublicIp
+  Url:
+    Value: !Sub "http://${Ec2Instance.PublicIp}"
