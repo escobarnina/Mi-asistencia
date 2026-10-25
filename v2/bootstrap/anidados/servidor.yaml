@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Stack Hijo - Capa de Servidor (EC2 Reutilizable).
+
+Parameters:
+  Environment:
+    Type: String
+  InstanceType:
+    Type: String
+  UbuntuAmiId:
+    Type: String
+  SecurityGroupId:
+    Type: String
+  RoleName:
+    Type: String
+    AllowedValues: [frontend, backend]
+
+Resources:
+  Ec2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref UbuntuAmiId
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          apt update -y
+          apt install -y apache2
+          systemctl enable --now apache2
+          echo "<h1>Hola desde ${RoleName} [${Environment}] - Ing. Alfonzo Salgado Flores</h1>" > /var/www/html/index.html
+      Tags:
+        - Key: Name
+          Value: !Sub "asistencia-${Environment}-${RoleName}"
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  InstanceId:
+    Value: !Ref Ec2Instance
+  PublicIp:
+    Value: !GetAtt Ec2Instance.PublicIp

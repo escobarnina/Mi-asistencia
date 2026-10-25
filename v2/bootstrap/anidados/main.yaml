@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Stack Padre - Orquestador Principal (main.yaml).
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, qa, prod]
+  UbuntuAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id
+  TemplatesS3BucketUrl:
+    Type: String
+    Default: "https://amazonaws.com"
+    Description: URL base de S3 donde subiste red.yaml, seguridad.yaml y servidor.yaml
+
+Mappings:
+  EnvConfig:
+    dev:
+      InstanceType: t3.micro
+    qa:
+      InstanceType: t3.micro
+    prod:
+      InstanceType: t3.micro
+
+Resources:
+  # 1. Despliegue de la Red
+  RedStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "${TemplatesS3BucketUrl}/red.yaml"
+
+  # 2. Despliegue de la Seguridad (Depende implícitamente del ambiente)
+  SeguridadStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "${TemplatesS3BucketUrl}/seguridad.yaml"
+      Parameters:
+        Environment: !Ref Environment
+
+  # 3. Despliegue del Servidor FRONTEND
+  FrontendServerStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "${TemplatesS3BucketUrl}/servidor.yaml"
+      Parameters:
+        Environment: !Ref Environment
+        InstanceType: !FindInMap [EnvConfig, !Ref Environment, InstanceType]
+        UbuntuAmiId: !Ref UbuntuAmiId
+        SecurityGroupId: !GetAtt SeguridadStack.Outputs.SecurityGroupId
+        RoleName: "frontend"
+
+  # 4. Despliegue del Servidor BACKEND
+  BackendServerStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "${TemplatesS3BucketUrl}/servidor.yaml"
+      Parameters:
+        Environment: !Ref Environment
+        InstanceType: !FindInMap [EnvConfig, !Ref Environment, InstanceType]
+        UbuntuAmiId: !Ref UbuntuAmiId
+        SecurityGroupId: !GetAtt SeguridadStack.Outputs.SecurityGroupId
+        RoleName: "backend"
+
+Outputs:
+  Environment:
+    Value: !Ref Environment
+
+  FrontendUrl:
+    Value: !Sub "http://${FrontendServerStack.Outputs.PublicIp}"
+
+  BackendUrl:
+    Value: !Sub "http://${BackendServerStack.Outputs.PublicIp}"

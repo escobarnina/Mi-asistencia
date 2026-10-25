@@ -1,0 +1,80 @@
+#!/bin/bash
+# =====================================================================
+#  Configuración automática del FRONTEND (corre una sola vez al crear la VM)
+#  Compila React/Vite y lo sirve con nginx; /api se reenvía al backend.
+#  SIN Docker. Log: /var/log/despliegue.log
+#  (También sirve en una VM Ubuntu de otra nube: reemplaza la IP del backend.)
+# =====================================================================
+set -euxo pipefail
+exec > /var/log/despliegue.log 2>&1
+export DEBIAN_FRONTEND=noninteractive
+export HOME=/root
+APT="apt-get -y -o DPkg::Lock::Timeout=300"
+BACKEND="${backend_ip}"
+
+# --- 1. Swap de 2 GB: el build de Vite no entra en 1 GB de RAM ---
+timedatectl set-timezone America/La_Paz
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+# --- 2. Paquetes: nginx, git y Node.js 20 (solo para compilar) ---
+$APT update
+$APT install nginx git curl ca-certificates
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+$APT install nodejs
+
+# --- 3. Código y build de producción ---
+rm -rf /opt/asistencia
+git clone --branch ${repo_rama} --depth 1 ${repo_url} /opt/asistencia
+cd /opt/asistencia/frontend
+npm ci
+npm run build
+mkdir -p /var/www/asistencia
+rm -rf /var/www/asistencia/*
+cp -r dist/* /var/www/asistencia/
+
+# --- 4. nginx: sirve la SPA y reenvía /api al backend ---
+cat > /etc/nginx/sites-available/asistencia <<EOF
+server {
+    listen 80 default_server;
+    server_name _;
+
+    root /var/www/asistencia;
+    index index.html;
+    client_max_body_size 10m;   # subida de Excel
+
+    location /api/ {
+        proxy_pass http://$BACKEND:8000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+}
+EOF
+rm -f /etc/nginx/sites-enabled/default
+ln -sf /etc/nginx/sites-available/asistencia /etc/nginx/sites-enabled/asistencia
+nginx -t
+systemctl enable nginx
+systemctl restart nginx
+
+# --- 5. Script para actualizar desde GitHub: sudo actualizar-frontend ---
+cat > /usr/local/bin/actualizar-frontend <<'EOF'
+#!/bin/bash
+set -e
+export HOME=/root
+cd /opt/asistencia && git pull
+cd frontend && npm ci && npm run build
+rm -rf /var/www/asistencia/* && cp -r dist/* /var/www/asistencia/
+systemctl reload nginx
+echo "Frontend actualizado"
+EOF
+chmod +x /usr/local/bin/actualizar-frontend
+
+echo "=== FRONTEND LISTO ==="

@@ -1,0 +1,12 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Stack Capa de Red (VPC por defecto).
+
+Resources:
+  # Obtiene la VPC por defecto de la región actual
+  DefaultVpc:
+    Type: AWS::EC2::VPCCidrBlock
+    Condition: False # Truco común para no crear una, sino referenciar la existente de forma segura
+  
+Outputs:
+  VpcId:
+    Value: !Ref AWS::NoValue # CloudFormation usará la VPC por defecto de la cuenta de forma automática si se pasa vacío

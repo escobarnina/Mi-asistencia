@@ -1,0 +1,28 @@
+# Variables de entorno reales (nunca se suben)
+.env
+backend/.env
+frontend/.env
+
+# Dependencias
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Builds del frontend
+frontend/dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Datos de MySQL (volumen local, por si acaso)
+db_data/
+
+# Archivos del sistema / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Cobertura de pruebas
+coverage/

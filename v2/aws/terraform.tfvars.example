@@ -1,0 +1,10 @@
+# Copia este archivo como terraform.tfvars y ajusta los valores.
+# terraform.tfvars NO se sube a GitHub (tiene contraseñas).
+
+region         = "us-east-1"
+tipo_instancia = "t3.micro"
+mi_ip          = "0.0.0.0/0"
+admin_password = "Asistencia-2026"
+cargar_semilla = true
+crear_frontend = false
+role_arn = "arn:aws:iam::acoud:role/RolTerraformColaborador"
