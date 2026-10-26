@@ -76,7 +76,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - { Key: Name, Value: !Sub "${Proyecto}-${Ambiente}-sg-backend" }
-
+        - { Key: Responsable, Value: escobarnina }
   # Reglas separadas para evitar dependencia circular entre los dos SG
   ApiDesdeFrontend:
     Type: AWS::EC2::SecurityGroupIngress
