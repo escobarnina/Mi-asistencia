@@ -51,6 +51,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - { Key: Name, Value: !Sub "${Proyecto}-${Ambiente}-sg-frontend" }
+        - { Key: Curso, Value: DevOps } 
 
   SgBackend:
     Type: AWS::EC2::SecurityGroup
