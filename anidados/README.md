@@ -112,6 +112,10 @@ Otros cambios seguros para la demo: una etiqueta, la descripción de una regla o
 | Contraseña del admin | Output `SecretoAdmin` → Secrets Manager → *Retrieve secret value* |
 | Llave SSH (.pem) | Output `LlavePrivadaEnParameterStore` → Systems Manager → Parameter Store → *Show decrypted value* |
 
+## AMI fijada
+
+> La AMI está fijada en `dev.env` (`UbuntuAmiId`). Cambiarla implica **REEMPLAZO** de las EC2 y pérdida de los datos de MySQL; hacerlo solo de forma intencional.
+
 ## Borrar (para no gastar)
 
 **CloudFormation → `asistencia-dev` → Delete.** Borra los 5 stacks anidados y todos sus recursos. El stack `conexion-github-asistencia` puede quedar (no cuesta nada); bórralo solo al final de la materia.

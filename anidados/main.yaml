@@ -24,8 +24,8 @@ Parameters:
     ConstraintDescription: Debe ser UNA IP en formato x.x.x.x/32 (https://checkip.amazonaws.com)
     Description: Unica IP que puede entrar por SSH.
   UbuntuAmiId:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id
+    Type: AWS::EC2::Image::Id
+    Description: AMI de Ubuntu fijada en parametros/<ambiente>.env. Cambiarla reemplaza las EC2.
   RepoUrl:
     Type: String
     Default: https://github.com/escobarnina/Mi-asistencia.git
