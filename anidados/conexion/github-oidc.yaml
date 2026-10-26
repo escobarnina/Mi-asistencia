@@ -241,6 +241,10 @@ Resources:
                 Effect: Allow
                 Action: [ssm:GetParameters]
                 Resource: !Sub "arn:aws:ssm:${AWS::Region}::parameter/aws/service/canonical/*"
+              - Sid: ValidarAmi
+                Effect: Allow
+                Action: ec2:DescribeImages   # esta accion no admite recurso
+                Resource: "*"
               - Sid: PasarSoloElRolDeEjecucion
                 Effect: Allow
                 Action: iam:PassRole
