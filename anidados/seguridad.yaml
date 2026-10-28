@@ -53,10 +53,11 @@ Resources:
         - { Key: Name, Value: !Sub "${Proyecto}-${Ambiente}-sg-frontend" }
         - { Key: Curso, Value: DevOps } 
         - { Key: Jorge, Value: Miercoles5 } 
-        - { Key: Balderrama, Value: Jueves20} 
+        - { Key: Jorge, Value: Miercoles20} 
         - { Key: Jorge3, Value: Miercoles7}
         - { Key: Jorge8, Value: Miercoles9}
         - { Key: Jorge11, Value: Miercoles11}
+        - { Key: Jorge12, Value: Miercoles12}
   SgBackend:
     Type: AWS::EC2::SecurityGroup
     Properties:
