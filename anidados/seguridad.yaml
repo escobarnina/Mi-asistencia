@@ -55,6 +55,7 @@ Resources:
         - { Key: Jorge, Value: Miercoles5 } 
         - { Key: Jorge2, Value: Miercoles6} 
         - { Key: Jorge3, Value: Miercoles7}
+        - { Key: Jorge8, Value: Miercoles9}
   SgBackend:
     Type: AWS::EC2::SecurityGroup
     Properties:
