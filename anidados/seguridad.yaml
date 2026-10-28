@@ -54,7 +54,7 @@ Resources:
         - { Key: Curso, Value: DevOps } 
         - { Key: Jorge, Value: Miercoles5 } 
         - { Key: Jorge2, Value: Miercoles6} 
-
+        - { Key: Jorge3, Value: Miercoles7}
   SgBackend:
     Type: AWS::EC2::SecurityGroup
     Properties:
