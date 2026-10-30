@@ -1,0 +1,11 @@
+config:
+  aws:region: us-east-1
+  asistencia-cloudinit-aws:proyecto: asistencia
+  asistencia-cloudinit-aws:tipo_instancia: t3.micro
+  asistencia-cloudinit-aws:mi_ip: 0.0.0.0/0
+  asistencia-cloudinit-aws:repo_url: https://github.com/escobarnina/Mi-asistencia.git
+  asistencia-cloudinit-aws:repo_rama: feat/cloudinit
+  asistencia-cloudinit-aws:admin_email: admin@ejemplo.com
+  asistencia-cloudinit-aws:admin_password:
+    secure: v1:placeholder
+  asistencia-cloudinit-aws:backend_publico: "true"

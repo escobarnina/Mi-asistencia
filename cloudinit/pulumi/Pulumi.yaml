@@ -1,0 +1,6 @@
+name: asistencia-cloudinit-aws
+runtime:
+  name: python
+  options:
+    virtualenv: venv
+description: Despliegue de Sistema de Asistencia (Backend + Frontend) en AWS EC2 con Pulumi y Cloud-Init
