@@ -77,6 +77,8 @@ Resources:
           Value: !Sub '${Proyecto}-backend-sg'
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: ManagedBy
+          Value: my
 
 Outputs:
   FrontendSecurityGroupId:
