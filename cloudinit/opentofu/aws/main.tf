@@ -197,6 +197,7 @@ resource "aws_instance" "backend" {
     jwt_secret     = random_password.jwt.result
     admin_email    = var.admin_email
     admin_password = var.admin_password
+    cargar_semilla = var.cargar_semilla
   })
   user_data_replace_on_change = true
 
@@ -248,6 +249,7 @@ resource "aws_instance" "frontend" {
     jwt_secret     = ""
     admin_email    = ""
     admin_password = ""
+    cargar_semilla = false
   })
   user_data_replace_on_change = true
 

@@ -172,6 +172,9 @@ runcmd:
   - |
     if [ -f /opt/asistencia/backend/init.sql ]; then
       mysql asistencia < /opt/asistencia/backend/init.sql
+%{ if cargar_semilla ~}
+      node /opt/asistencia/backend/src/seed.js || true
+%{ endif ~}
     else
       sudo -u asistencia -H bash -c 'cd /opt/asistencia/backend && npm ci && NODE_ENV=production npm run migrate && NODE_ENV=production npm run seed'
     fi
