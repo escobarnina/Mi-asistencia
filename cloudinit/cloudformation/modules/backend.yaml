@@ -105,14 +105,14 @@ Resources:
                 NODE_ENV=production
                 DB_HOST=127.0.0.1
                 DB_PORT=3306
-                DB_USER=asistencia
-                DB_PASSWORD=${DbPassword}
-                DB_NAME=asistencia
+                MYSQL_DATABASE=asistencia
+                MYSQL_USER=asistencia
+                MYSQL_PASSWORD=${DbPassword}
                 JWT_SECRET=${JwtSecret}
                 ADMIN_EMAIL=${AdminEmail}
                 ADMIN_PASSWORD=${AdminPassword}
                 SEED_DATA=${CargarSemilla}
-                CORS_ORIGIN=*
+                CORS_ORIGINS=*
 
           runcmd:
             - set -eux
