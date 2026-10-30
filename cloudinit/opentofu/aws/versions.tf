@@ -24,8 +24,14 @@ terraform {
 
 provider "aws" {
   region = var.region
-  # Las credenciales se toman de "aws configure" (~/.aws/credentials).
-  # Nunca escribas tu Access Key aquí.
+
+  dynamic "assume_role" {
+    for_each = var.role_arn != "" ? [1] : []
+    content {
+      role_arn     = var.role_arn
+      session_name = "SesionColaborador"
+    }
+  }
 
   default_tags {
     tags = {
@@ -34,3 +40,4 @@ provider "aws" {
     }
   }
 }
+

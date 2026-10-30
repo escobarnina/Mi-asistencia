@@ -1,0 +1,9 @@
+# Copia este archivo como "backend.hcl" y ajusta los valores generados por el bootstrap.
+# "backend.hcl" NO se sube a GitHub gracias a .gitignore.
+
+bucket         = "NOMBRE_DE_TU_BUCKET_S3"
+key            = "mi-asistencia/dev/terraform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "asistencia-tfstate-locks"
+encrypt        = true
+role_arn       = "arn:aws:iam::ACCOUNT_ID_DEL_CREADOR:role/RolTerraformColaborador"

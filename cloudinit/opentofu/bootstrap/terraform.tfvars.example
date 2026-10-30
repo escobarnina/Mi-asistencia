@@ -1,0 +1,6 @@
+# Copia este archivo como terraform.tfvars y pon los Account IDs reales.
+# terraform.tfvars NO se sube a GitHub gracias a .gitignore.
+
+cuentas_colaboradores = [
+  "123456789012" # Reemplazar con el ID de 12 dígitos de tu compañero el Account ID
+]

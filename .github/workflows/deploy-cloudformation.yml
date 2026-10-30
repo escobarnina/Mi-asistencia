@@ -1,0 +1,75 @@
+name: Deploy CloudFormation Stack
+
+on:
+  push:
+    paths:
+      - 'cloudformation/**'
+      - '.github/workflows/**'
+    branches:
+      - main
+      - feat/cloudformation
+  workflow_dispatch:
+
+# =========================================================================
+# COMENTADO TEMPORALMENTE PARA EXPERIMENTAR EL ERROR DE CONCURRENCIA EN AWS:
+# Al comentar 'concurrency', GitHub Actions NO encolara los trabajos.
+# Si dos commits se disparan al mismo tiempo o uno tras otro rapidamente,
+# ambos intentaran ejecutar 'aws cloudformation deploy' en paralelo contra AWS,
+# provocando el error:
+# "Stack [stack-asistencia-modular] is currently in UPDATE_IN_PROGRESS state and cannot be updated."
+# =========================================================================
+# concurrency:
+#   group: production-cfn
+#   cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-infra:
+    name: Package and Deploy CloudFormation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Package Modular Templates to S3
+        run: |
+          aws cloudformation package \
+            --template-file cloudformation/main.yaml \
+            --s3-bucket ${{ secrets.CFN_S3_BUCKET }} \
+            --output-template-file cloudformation/packaged.yaml
+
+      - name: Deploy CloudFormation Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/packaged.yaml \
+            --stack-name stack-asistencia-modular \
+            --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_IAM \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+                VpcId=${{ secrets.CFN_VPC_ID }} \
+                SubnetId=${{ secrets.CFN_SUBNET_ID }} \
+                KeyName=${{ secrets.CFN_KEY_NAME }} \
+                AmiId=${{ secrets.CFN_AMI_ID }} \
+                MiIp=${{ secrets.CFN_MI_IP }} \
+                DbPassword=${{ secrets.CFN_DB_PASSWORD }} \
+                JwtSecret=${{ secrets.CFN_JWT_SECRET }} \
+                AdminEmail=${{ secrets.CFN_ADMIN_EMAIL }} \
+                AdminPassword=${{ secrets.CFN_ADMIN_PASSWORD }}
+
+      - name: Show Outputs
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name stack-asistencia-modular \
+            --query "Stacks[0].Outputs" \
+            --output table
