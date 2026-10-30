@@ -35,7 +35,7 @@ variable "repo_url" {
 variable "repo_rama" {
   description = "Rama que se despliega."
   type        = string
-  default     = "main"
+  default     = "feat/cloudinit"
 }
 
 variable "admin_email" {
