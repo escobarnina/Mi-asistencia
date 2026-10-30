@@ -1,0 +1,209 @@
+#cloud-config
+package_update: true
+packages:
+  - git
+  - curl
+  - ca-certificates
+%{ if rol == "frontend" ~}
+  - nginx
+  - nodejs
+%{ endif ~}
+%{ if rol == "backend" ~}
+  - mariadb-server
+%{ endif ~}
+
+write_files:
+%{ if rol == "backend" ~}
+  # Servicio systemd para el Backend
+  - path: /etc/systemd/system/asistencia-backend.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Sistema de Asistencia - Backend (Node/Express)
+      After=network.target mariadb.service
+      Requires=mariadb.service
+
+      [Service]
+      User=asistencia
+      WorkingDirectory=/opt/asistencia/backend
+      Environment=NODE_ENV=production
+      ExecStart=/usr/bin/node src/server.js
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # Soporte utf8mb4 en MariaDB
+  - path: /etc/mysql/mariadb.conf.d/zz-asistencia.cnf
+    permissions: "0644"
+    content: |
+      [mysqld]
+      character-set-server = utf8mb4
+      collation-server     = utf8mb4_unicode_ci
+      bind-address         = 127.0.0.1
+
+  # Script SQL para creación de usuario y permisos
+  - path: /root/crear-usuario.sql
+    permissions: "0600"
+    content: |
+      CREATE DATABASE IF NOT EXISTS asistencia CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+      CREATE USER IF NOT EXISTS 'asistencia'@'localhost' IDENTIFIED BY '${db_password}';
+      CREATE USER IF NOT EXISTS 'asistencia'@'127.0.0.1' IDENTIFIED BY '${db_password}';
+      GRANT ALL PRIVILEGES ON asistencia.* TO 'asistencia'@'localhost';
+      GRANT ALL PRIVILEGES ON asistencia.* TO 'asistencia'@'127.0.0.1';
+      FLUSH PRIVILEGES;
+
+  # Plantilla de variables de entorno (.env) para el backend
+  - path: /root/asistencia.env
+    permissions: "0600"
+    content: |
+      NODE_ENV=production
+      PORT=8000
+      DB_HOST=127.0.0.1
+      DB_PORT=3306
+      MYSQL_DATABASE=asistencia
+      MYSQL_USER=asistencia
+      MYSQL_PASSWORD=${db_password}
+      JWT_SECRET=${jwt_secret}
+      JWT_MINUTOS=480
+      ADMIN_EMAIL=${admin_email}
+      ADMIN_PASSWORD='${admin_password}'
+      TZ=America/La_Paz
+      CORS_ORIGINS=http://localhost:5173
+
+  # Script para actualizar el backend
+  - path: /usr/local/bin/actualizar-backend
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -e
+      export HOME=/root
+      cd /opt/asistencia && git pull
+      cd /opt/asistencia/backend && npm ci && (mysql asistencia < init.sql || npm run migrate)
+      systemctl restart asistencia-backend
+      sleep 2 && curl -s http://127.0.0.1:8000/api/health && echo
+      echo "=== Backend actualizado ==="
+%{ endif ~}
+
+%{ if rol == "frontend" ~}
+  # Configuración de Nginx para servir el Frontend y reenviar /api/ al backend por IP privada
+  - path: /etc/nginx/sites-available/asistencia
+    permissions: "0644"
+    content: |
+      server {
+          listen 80 default_server;
+          server_name _;
+
+          root /var/www/asistencia;
+          index index.html;
+          client_max_body_size 10m;
+
+          location /api/ {
+              proxy_pass http://${backend_ip}:8000;
+              proxy_set_header Host $host;
+              proxy_set_header X-Real-IP $remote_addr;
+              proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto $scheme;
+          }
+
+          location / {
+              try_files $uri $uri/ /index.html;
+          }
+      }
+
+  # Script para actualizar el frontend
+  - path: /usr/local/bin/actualizar-frontend
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -e
+      export HOME=/root
+      cd /opt/asistencia && git pull
+      cd /opt/asistencia/frontend && npm ci && npm run build
+      rm -rf /var/www/asistencia/* && cp -r dist/* /var/www/asistencia/
+      systemctl reload nginx
+      echo "=== Frontend actualizado ==="
+%{ endif ~}
+
+runcmd:
+  # 1. Zona Horaria y Memoria Swap
+  - timedatectl set-timezone America/La_Paz
+  - |
+%{ if rol == "frontend" ~}
+    if [ ! -f /swapfile ]; then
+      fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+      chmod 600 /swapfile
+      mkswap /swapfile
+      swapon /swapfile
+      echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    fi
+%{ else ~}
+    if [ ! -f /swapfile ]; then
+      fallocate -l 1G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=1024
+      chmod 600 /swapfile
+      mkswap /swapfile
+      swapon /swapfile
+      echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    fi
+%{ endif ~}
+
+%{ if rol == "backend" ~}
+  # 2. Instalar Node.js 20 LTS
+  - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  - apt-get install -y -o DPkg::Lock::Timeout=300 nodejs
+
+  # 3. Iniciar MariaDB y crear usuario
+  - systemctl restart mariadb || systemctl restart mysql
+  - mysql < /root/crear-usuario.sql
+
+  # 4. Clonar repositorio
+  - id asistencia || useradd --system --create-home --shell /bin/bash asistencia
+  - rm -rf /opt/asistencia
+  - git clone --branch ${repo_rama} --depth 1 ${repo_url} /opt/asistencia
+
+  # 5. Colocar .env y asegurar permisos
+  - cp /root/asistencia.env /opt/asistencia/.env
+  - chmod 600 /opt/asistencia/.env
+  - chown -R asistencia:asistencia /opt/asistencia
+
+  # 6. Cargar base de datos o ejecutar migraciones y semillas
+  - |
+    if [ -f /opt/asistencia/backend/init.sql ]; then
+      mysql asistencia < /opt/asistencia/backend/init.sql
+    else
+      sudo -u asistencia -H bash -c 'cd /opt/asistencia/backend && npm ci && NODE_ENV=production npm run migrate && NODE_ENV=production npm run seed'
+    fi
+
+  # 7. Dependencias del backend y levantar servicio
+  - sudo -u asistencia -H bash -c 'cd /opt/asistencia/backend && npm ci'
+  - systemctl daemon-reload
+  - systemctl enable --now asistencia-backend
+  - sleep 3
+  - curl -s http://127.0.0.1:8000/api/health || true
+  - echo "=== BACKEND COMPLETADO CON ÉXITO ==="
+%{ endif ~}
+
+%{ if rol == "frontend" ~}
+  # 2. Instalar Node.js 20 LTS para compilar Vite
+  - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  - apt-get install -y -o DPkg::Lock::Timeout=300 nodejs
+
+  # 3. Clonar repositorio
+  - rm -rf /opt/asistencia
+  - git clone --branch ${repo_rama} --depth 1 ${repo_url} /opt/asistencia
+
+  # 4. Compilar Frontend y alojar en /var/www/asistencia
+  - cd /opt/asistencia/frontend && npm ci && npm run build
+  - mkdir -p /var/www/asistencia
+  - rm -rf /var/www/asistencia/*
+  - cp -r dist/* /var/www/asistencia/
+
+  # 5. Habilitar sitio Nginx
+  - rm -f /etc/nginx/sites-enabled/default
+  - ln -sf /etc/nginx/sites-available/asistencia /etc/nginx/sites-enabled/asistencia
+  - nginx -t
+  - systemctl enable nginx
+  - systemctl restart nginx
+  - echo "=== FRONTEND COMPLETADO CON ÉXITO ==="
+%{ endif ~}

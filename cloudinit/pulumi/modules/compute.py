@@ -30,7 +30,7 @@ def create_backend_instance(
     user_data: pulumi.Output[str]
 ) -> aws.ec2.Instance:
     return aws.ec2.Instance(
-        f"{cfg.proyecto}-backend",
+        f"{cfg.proyecto}-pulumi-backend",
         ami=ami_id,
         instance_type=cfg.tipo_instancia,
         subnet_id=subnet_id,
@@ -46,8 +46,9 @@ def create_backend_instance(
         user_data=user_data,
         user_data_replace_on_change=True,
         tags={
-            "Name": f"{cfg.proyecto}-backend",
+            "Name": f"{cfg.proyecto}-pulumi-backend",
             "rol": "backend",
+            "herramienta": "pulumi",
             "ManagedBy": "Pulumi"
         }
     )
@@ -60,7 +61,7 @@ def create_frontend_instance(
     user_data: pulumi.Output[str]
 ) -> aws.ec2.Instance:
     return aws.ec2.Instance(
-        f"{cfg.proyecto}-frontend",
+        f"{cfg.proyecto}-pulumi-frontend",
         ami=ami_id,
         instance_type=cfg.tipo_instancia,
         subnet_id=subnet_id,
@@ -76,8 +77,9 @@ def create_frontend_instance(
         user_data=user_data,
         user_data_replace_on_change=True,
         tags={
-            "Name": f"{cfg.proyecto}-frontend",
+            "Name": f"{cfg.proyecto}-pulumi-frontend",
             "rol": "frontend",
+            "herramienta": "pulumi",
             "ManagedBy": "Pulumi"
         }
     )

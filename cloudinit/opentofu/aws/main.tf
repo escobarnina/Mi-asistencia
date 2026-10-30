@@ -194,9 +194,10 @@ resource "aws_instance" "backend" {
   user_data_replace_on_change = true
 
   tags = {
-    Name     = "${var.proyecto}-backend"
-    proyecto = var.proyecto
-    rol      = "backend"
+    Name      = "${var.proyecto}-tofu-backend"
+    proyecto  = var.proyecto
+    rol       = "backend"
+    herramienta = "opentofu"
   }
 
   lifecycle {
@@ -242,9 +243,10 @@ resource "aws_instance" "frontend" {
   user_data_replace_on_change = true
 
   tags = {
-    Name     = "${var.proyecto}-frontend"
-    proyecto = var.proyecto
-    rol      = "frontend"
+    Name        = "${var.proyecto}-tofu-frontend"
+    proyecto    = var.proyecto
+    rol         = "frontend"
+    herramienta = "opentofu"
   }
 
   lifecycle {

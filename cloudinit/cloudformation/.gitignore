@@ -1,0 +1,8 @@
+# Ignorar plantillas empaquetadas generadas en tiempo de ejecucion
+packaged.yaml
+packaged-*.yaml
+
+# Archivos de entorno y llaves privadas
+*.pem
+*.key
+.env

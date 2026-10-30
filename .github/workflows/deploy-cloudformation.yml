@@ -1,38 +1,57 @@
-name: Deploy CloudFormation Stack
+name: Deploy CloudFormation (Modular)
 
 on:
-  push:
-    paths:
-      - 'cloudformation/**'
-      - '.github/workflows/**'
+  pull_request:
     branches:
       - main
-      - feat/cloudformation
+      - feat/cloudinit
+    paths:
+      - 'cloudinit/cloudformation/**'
+      - '.github/workflows/deploy-cloudformation.yml'
+  push:
+    branches:
+      - main
+      - feat/cloudinit
+    paths:
+      - 'cloudinit/cloudformation/**'
+      - '.github/workflows/deploy-cloudformation.yml'
   workflow_dispatch:
 
-# =========================================================================
-# COMENTADO TEMPORALMENTE PARA EXPERIMENTAR EL ERROR DE CONCURRENCIA EN AWS:
-# Al comentar 'concurrency', GitHub Actions NO encolara los trabajos.
-# Si dos commits se disparan al mismo tiempo o uno tras otro rapidamente,
-# ambos intentaran ejecutar 'aws cloudformation deploy' en paralelo contra AWS,
-# provocando el error:
-# "Stack [stack-asistencia-modular] is currently in UPDATE_IN_PROGRESS state and cannot be updated."
-# =========================================================================
-# concurrency:
-#   group: production-cfn
-#   cancel-in-progress: false
+concurrency:
+  group: cfn-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
-  id-token: write
   contents: read
 
 jobs:
-  deploy-infra:
-    name: Package and Deploy CloudFormation
+  validate:
+    name: Lint & Validate Templates
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install cfn-lint
+        run: pip install --quiet cfn-lint
+
+      - name: Run cfn-lint
+        run: |
+          echo "Validating modular CloudFormation templates..."
+          cfn-lint --ignore-checks W3002 cloudinit/cloudformation/main.yaml cloudinit/cloudformation/modules/*.yaml
+
+  deploy:
+    name: Package and Deploy to AWS
+    needs: validate
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
@@ -40,36 +59,73 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
 
-      - name: Package Modular Templates to S3
+      - name: Discover Default Network & Ensure S3 Bucket
+        id: prep
+        run: |
+          set -e
+          # 1. Obtener ID de la cuenta AWS actual dinamicamente (sin hardcodear cuentas)
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          REGION="${{ secrets.AWS_REGION || 'us-east-1' }}"
+          BUCKET_NAME="asistencia-cfn-plantillas-${ACCOUNT_ID}-${REGION}"
+
+          echo "bucket=$BUCKET_NAME" >> "$GITHUB_OUTPUT"
+
+          # 2. Asegurar que el bucket S3 existe de forma automatica
+          echo "Checking S3 bucket: $BUCKET_NAME"
+          if ! aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+            echo "Creating bucket $BUCKET_NAME..."
+            if [ "$REGION" = "us-east-1" ]; then
+              aws s3api create-bucket --bucket "$BUCKET_NAME" --region "$REGION"
+            else
+              aws s3api create-bucket --bucket "$BUCKET_NAME" --region "$REGION" \
+                --create-bucket-configuration LocationConstraint="$REGION"
+            fi
+            aws s3api put-bucket-encryption --bucket "$BUCKET_NAME" \
+              --server-side-encryption-configuration '{"Rules": [{"ApplyServerSideEncryptionByDefault": {"SSEAlgorithm": "AES256"}}]}'
+          fi
+
+          # 3. Detectar VPC y Subnet por defecto si no vienen por secret
+          VPC_ID="${{ secrets.CFN_VPC_ID }}"
+          if [ -z "$VPC_ID" ]; then
+            VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text)
+          fi
+
+          SUBNET_ID="${{ secrets.CFN_SUBNET_ID }}"
+          if [ -z "$SUBNET_ID" ]; then
+            SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" "Name=default-for-az,Values=true" --query "Subnets[0].SubnetId" --output text)
+          fi
+
+          echo "vpc_id=$VPC_ID" >> "$GITHUB_OUTPUT"
+          echo "subnet_id=$SUBNET_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Package Modular Templates (S3)
         run: |
           aws cloudformation package \
-            --template-file cloudformation/main.yaml \
-            --s3-bucket ${{ secrets.CFN_S3_BUCKET }} \
-            --output-template-file cloudformation/packaged.yaml
+            --template-file cloudinit/cloudformation/main.yaml \
+            --s3-bucket "${{ steps.prep.outputs.bucket }}" \
+            --s3-prefix "cloudformation" \
+            --output-template-file cloudinit/cloudformation/packaged.yaml
 
       - name: Deploy CloudFormation Stack
         run: |
           aws cloudformation deploy \
-            --template-file cloudformation/packaged.yaml \
-            --stack-name stack-asistencia-modular \
-            --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_IAM \
+            --template-file cloudinit/cloudformation/packaged.yaml \
+            --stack-name miasistencia-modular-stack \
+            --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
             --no-fail-on-empty-changeset \
             --parameter-overrides \
-                VpcId=${{ secrets.CFN_VPC_ID }} \
-                SubnetId=${{ secrets.CFN_SUBNET_ID }} \
-                KeyName=${{ secrets.CFN_KEY_NAME }} \
-                AmiId=${{ secrets.CFN_AMI_ID }} \
-                MiIp=${{ secrets.CFN_MI_IP }} \
-                DbPassword=${{ secrets.CFN_DB_PASSWORD }} \
-                JwtSecret=${{ secrets.CFN_JWT_SECRET }} \
-                AdminEmail=${{ secrets.CFN_ADMIN_EMAIL }} \
-                AdminPassword=${{ secrets.CFN_ADMIN_PASSWORD }}
+                VpcId=${{ steps.prep.outputs.vpc_id }} \
+                SubnetId=${{ steps.prep.outputs.subnet_id }} \
+                RepoRama=feat/cloudinit \
+                AdminPassword=${{ secrets.ADMIN_PASSWORD || 'Admin1234' }}
 
       - name: Show Outputs
+        if: always()
         run: |
           aws cloudformation describe-stacks \
-            --stack-name stack-asistencia-modular \
+            --stack-name miasistencia-modular-stack \
             --query "Stacks[0].Outputs" \
-            --output table
+            --output table || true

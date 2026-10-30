@@ -1,0 +1,168 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Modulo de Instancia EC2 Backend (Node.js 20 + MariaDB) con Cloud-Init'
+
+Parameters:
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+  InstanceType:
+    Type: String
+    Default: 't3.small'
+  Proyecto:
+    Type: String
+    Default: 'asistencia'
+  RepoUrl:
+    Type: String
+    Default: 'https://github.com/escobarnina/Mi-asistencia.git'
+  RepoRama:
+    Type: String
+    Default: 'feat/cloudinit'
+  DbPassword:
+    Type: String
+    NoEcho: true
+    Default: 'AsistenciaSecretDb2026!'
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    Default: 'SuperSecretKeyForJWTAuthTokenAsistenciaApp2026!'
+  AdminEmail:
+    Type: String
+    Default: 'admin@ejemplo.com'
+  AdminPassword:
+    Type: String
+    NoEcho: true
+    Default: 'Admin1234'
+  CargarSemilla:
+    Type: String
+    Default: 'true'
+  UbuntuAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id'
+
+Resources:
+  BackendInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref UbuntuAmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #cloud-config
+          package_update: true
+          package_upgrade: false
+          packages:
+            - curl
+            - git
+            - ca-certificates
+            - gnupg
+            - ufw
+            - mariadb-server
+            - mariadb-client
+
+          write_files:
+            - path: /etc/systemd/system/asistencia-backend.service
+              permissions: "0644"
+              owner: root:root
+              content: |
+                [Unit]
+                Description=Asistencia Backend Service
+                After=network.target mariadb.service
+                Wants=mariadb.service
+
+                [Service]
+                Type=simple
+                User=root
+                WorkingDirectory=/opt/asistencia/backend
+                Environment=NODE_ENV=production
+                EnvironmentFile=/opt/asistencia/.env
+                ExecStart=/usr/bin/npm start
+                Restart=always
+                RestartSec=5
+                StandardOutput=journal
+                StandardError=journal
+
+                [Install]
+                WantedBy=multi-user.target
+
+            - path: /root/asistencia.env
+              permissions: "0600"
+              owner: root:root
+              content: |
+                PORT=8000
+                NODE_ENV=production
+                DB_HOST=127.0.0.1
+                DB_PORT=3306
+                DB_USER=asistencia
+                DB_PASSWORD=${DbPassword}
+                DB_NAME=asistencia
+                JWT_SECRET=${JwtSecret}
+                ADMIN_EMAIL=${AdminEmail}
+                ADMIN_PASSWORD=${AdminPassword}
+                SEED_DATA=${CargarSemilla}
+                CORS_ORIGIN=*
+
+          runcmd:
+            - set -eux
+            - timedatectl set-timezone America/La_Paz
+            - if [ ! -f /swapfile ]; then fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab; fi
+            - mkdir -p /etc/apt/keyrings
+            - curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+            - echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
+            - apt-get update -y
+            - apt-get install -y nodejs
+            - systemctl enable --now mariadb
+            - until mysqladmin ping --silent; do echo "Waiting for MariaDB..."; sleep 2; done
+            - |
+              mysql -e "CREATE DATABASE IF NOT EXISTS asistencia CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+              mysql -e "CREATE USER IF NOT EXISTS 'asistencia'@'localhost' IDENTIFIED BY '${DbPassword}';"
+              mysql -e "CREATE USER IF NOT EXISTS 'asistencia'@'127.0.0.1' IDENTIFIED BY '${DbPassword}';"
+              mysql -e "GRANT ALL PRIVILEGES ON asistencia.* TO 'asistencia'@'localhost';"
+              mysql -e "GRANT ALL PRIVILEGES ON asistencia.* TO 'asistencia'@'127.0.0.1';"
+              mysql -e "FLUSH PRIVILEGES;"
+            - rm -rf /opt/asistencia
+            - git clone --depth 1 -b ${RepoRama} ${RepoUrl} /opt/asistencia
+            - cp /root/asistencia.env /opt/asistencia/.env
+            - if [ -f /opt/asistencia/backend/init.sql ]; then mysql asistencia < /opt/asistencia/backend/init.sql; fi
+            - cd /opt/asistencia/backend && npm install --production=false
+            - if [ "${CargarSemilla}" = "true" ] && [ -f /opt/asistencia/backend/src/seed.js ]; then cd /opt/asistencia/backend && node src/seed.js || true; fi
+            - systemctl daemon-reload
+            - systemctl enable --now asistencia-backend
+            - ufw allow 22/tcp || true
+            - ufw allow 8000/tcp || true
+            - ufw --force enable || true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Proyecto}-cfn-backend'
+        - Key: Rol
+          Value: backend
+        - Key: Herramienta
+          Value: cloudformation
+        - Key: ManagedBy
+          Value: CloudFormation
+
+Outputs:
+  BackendInstanceId:
+    Description: ID de la instancia backend
+    Value: !Ref BackendInstance
+  BackendPrivateIp:
+    Description: IP privada de la instancia backend
+    Value: !GetAtt BackendInstance.PrivateIp
+  BackendPublicIp:
+    Description: IP publica de la instancia backend
+    Value: !GetAtt BackendInstance.PublicIp
+  BackendApiUrl:
+    Description: URL publica del API
+    Value: !Sub 'http://${BackendInstance.PublicIp}:8000'

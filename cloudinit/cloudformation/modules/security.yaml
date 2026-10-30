@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Modulo de Seguridad - Security Groups para Frontend y Backend'
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: ID de la VPC
+  MiIp:
+    Type: String
+    Default: '0.0.0.0/0'
+    Description: CIDR permitido para administracion SSH
+  Proyecto:
+    Type: String
+    Default: 'asistencia'
+
+Resources:
+  FrontendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub 'Security Group Frontend (${Proyecto}) - HTTP, HTTPS y SSH'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP publico
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS publico
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref MiIp
+          Description: SSH restringido
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Permitir salida a internet
+      Tags:
+        - Key: Name
+          Value: !Sub '${Proyecto}-frontend-sg'
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  BackendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub 'Security Group Backend (${Proyecto}) - API y SSH'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        # Puerto 8000 accesible desde Frontend SG
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          SourceSecurityGroupId: !Ref FrontendSecurityGroup
+          Description: Acceso API interno desde Frontend
+        # Puerto 8000 para pruebas y verificacion directa
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: 0.0.0.0/0
+          Description: Acceso API publico / health
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref MiIp
+          Description: SSH restringido
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Permitir salida a internet
+      Tags:
+        - Key: Name
+          Value: !Sub '${Proyecto}-backend-sg'
+        - Key: ManagedBy
+          Value: CloudFormation
+
+Outputs:
+  FrontendSecurityGroupId:
+    Description: ID del Security Group de Frontend
+    Value: !Ref FrontendSecurityGroup
+  BackendSecurityGroupId:
+    Description: ID del Security Group de Backend
+    Value: !Ref BackendSecurityGroup
