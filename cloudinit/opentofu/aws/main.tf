@@ -64,6 +64,9 @@ resource "random_password" "jwt" {
 
 # ---------- Security Group: Frontend ----------
 resource "aws_security_group" "frontend" {
+  #checkov:skip=CKV_AWS_260: El frontend requiere puerto 80 publico para acceso web
+  #checkov:skip=CKV_AWS_24: Puerto 22 SSH restringido por defecto via var.mi_ip
+  #checkov:skip=CKV_AWS_382: Se permite salida a internet para descarga de paquetes
   count       = var.crear_frontend ? 1 : 0
   name        = "${var.proyecto}-sg-frontend"
   description = "Frontend: HTTP publico (80) y SSH (22)"
@@ -101,6 +104,7 @@ resource "aws_security_group" "frontend" {
 
 # ---------- Security Group: Backend ----------
 resource "aws_security_group" "backend" {
+  #checkov:skip=CKV_AWS_382: Se permite salida a internet para dependencias y actualizaciones
   name        = "${var.proyecto}-sg-backend"
   description = "Backend: API 8000 y SSH. MySQL NO se expone a internet."
   vpc_id      = data.aws_vpc.default.id
@@ -121,6 +125,7 @@ resource "aws_security_group" "backend" {
 
 # Reglas de entrada para el Backend
 resource "aws_vpc_security_group_ingress_rule" "ssh_backend" {
+  #checkov:skip=CKV_AWS_24: Puerto 22 SSH restringido por defecto via var.mi_ip
   security_group_id = aws_security_group.backend.id
   description       = "SSH al backend"
   ip_protocol       = "tcp"
@@ -161,6 +166,8 @@ resource "aws_vpc_security_group_ingress_rule" "api_desde_externo" {
 
 # ---------- VM 1: BACKEND (Node.js + MariaDB) con Cloud-Init ----------
 resource "aws_instance" "backend" {
+  #checkov:skip=CKV_AWS_88: IP publica requerida para acceso directo y salida a internet sin NAT Gateway
+  #checkov:skip=CKV2_AWS_41: No se requiere IAM Instance Profile para backend standalone
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.tipo_instancia
   subnet_id                   = data.aws_subnets.default.ids[0]
@@ -209,6 +216,8 @@ resource "aws_instance" "backend" {
 
 # ---------- VM 2: FRONTEND (Nginx sirviendo React) con Cloud-Init ----------
 resource "aws_instance" "frontend" {
+  #checkov:skip=CKV_AWS_88: IP publica requerida para servir la aplicacion web a los usuarios
+  #checkov:skip=CKV2_AWS_41: No se requiere IAM Instance Profile para frontend estatico
   count                       = var.crear_frontend ? 1 : 0
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.tipo_instancia

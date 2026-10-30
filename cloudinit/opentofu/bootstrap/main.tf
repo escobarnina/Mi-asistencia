@@ -141,7 +141,7 @@ resource "local_file" "tfvars_app" {
     region         = "${var.region}"
     tipo_instancia = "t3.micro"
     mi_ip          = "0.0.0.0/0"
-    admin_password = "Asistencia-2026"
+    admin_password = "CambiarPasswordSeguro123!"
     role_arn       = "${aws_iam_role.colaborador.arn}"
   EOT
 }
