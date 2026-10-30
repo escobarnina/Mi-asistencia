@@ -72,21 +72,37 @@ try {
         }
     }
 
-    # Verificar terraform.tfvars
+    # Verificar / actualizar terraform.tfvars
+    # IMPORTANTE: siempre actualizar repo_rama y admin_password para evitar
+    # el error "Mismatch between input and plan variable value" al hacer apply.
     if (-not (Test-Path "terraform.tfvars")) {
         Write-Host "==> Preparando 'terraform.tfvars' a partir de 'terraform.tfvars.example'..." -ForegroundColor Yellow
         if (Test-Path "terraform.tfvars.example") {
-            $tfvarsContent = Get-Content "terraform.tfvars.example" -Raw
-            # Reemplazar valores por defecto si se pasaron parametros
-            $tfvarsContent = $tfvarsContent -replace 'repo_rama\s*=\s*".*"', "repo_rama = `"$Branch`""
-            $tfvarsContent = $tfvarsContent -replace 'admin_password\s*=\s*".*"', "admin_password = `"$AdminPassword`""
-            Set-Content -Path "terraform.tfvars" -Value $tfvarsContent
-            Write-Host "    Archivo terraform.tfvars creado y configurado." -ForegroundColor Green
+            Copy-Item "terraform.tfvars.example" "terraform.tfvars"
+            Write-Host "    Archivo terraform.tfvars creado desde plantilla." -ForegroundColor Green
         } else {
             Write-Host "`n[ERROR]: Falta 'terraform.tfvars' y no existe plantilla .example." -ForegroundColor Red
+            Write-Host "👉 Crea el archivo aws\terraform.tfvars con al menos: admin_password = `"TuPassword`"`n" -ForegroundColor Yellow
             exit 1
         }
     }
+
+    # Siempre actualizar repo_rama y admin_password en el tfvars existente para
+    # que plan y apply lean exactamente el mismo valor (evita mismatch).
+    Write-Host "==> Sincronizando repo_rama y admin_password en terraform.tfvars..." -ForegroundColor Yellow
+    $tfvarsContent = Get-Content "terraform.tfvars" -Raw
+    if ($tfvarsContent -match 'repo_rama\s*=') {
+        $tfvarsContent = $tfvarsContent -replace 'repo_rama\s*=\s*"[^"]*"', "repo_rama = `"$Branch`""
+    } else {
+        $tfvarsContent += "`nrepo_rama = `"$Branch`""
+    }
+    if ($tfvarsContent -match 'admin_password\s*=') {
+        $tfvarsContent = $tfvarsContent -replace 'admin_password\s*=\s*"[^"]*"', "admin_password = `"$AdminPassword`""
+    } else {
+        $tfvarsContent += "`nadmin_password = `"$AdminPassword`""
+    }
+    Set-Content -Path "terraform.tfvars" -Value $tfvarsContent -NoNewline
+    Write-Host "    terraform.tfvars sincronizado." -ForegroundColor Green
 
     # 4. Inicializar OpenTofu
     Write-Host "`n==> [2/4] Inicializando OpenTofu ($bin init)..." -ForegroundColor Cyan
@@ -102,8 +118,15 @@ try {
     }
 
     # 5. Plan / Validar
+    # Eliminar plan anterior para evitar el error "Mismatch between input and plan variable value"
+    if (Test-Path "tfplan") {
+        Remove-Item "tfplan" -Force
+        Write-Host "    Plan anterior eliminado para forzar regeneración limpia." -ForegroundColor DarkGray
+    }
     Write-Host "`n==> [3/4] Generando plan de ejecución ($bin plan)..." -ForegroundColor Cyan
-    & $bin plan -var="repo_rama=$Branch" -var="admin_password=$AdminPassword" -out="tfplan"
+    # Las variables vienen del terraform.tfvars ya sincronizado, NO se pasan por -var
+    # para evitar el mismatch entre plan y apply.
+    & $bin plan -out="tfplan"
     if ($LASTEXITCODE -ne 0) {
         Write-Host "`n[ERROR]: Falló '$bin plan'. Revisa las credenciales o variables de AWS." -ForegroundColor Red
         exit 1
