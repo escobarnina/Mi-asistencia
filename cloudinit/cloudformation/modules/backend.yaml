@@ -135,6 +135,7 @@ Resources:
             - rm -rf /opt/asistencia
             - git clone --depth 1 -b ${RepoRama} ${RepoUrl} /opt/asistencia
             - cp /root/asistencia.env /opt/asistencia/.env
+            - cp /root/asistencia.env /opt/asistencia/backend/.env
             - if [ -f /opt/asistencia/backend/init.sql ]; then mysql asistencia < /opt/asistencia/backend/init.sql; fi
             - cd /opt/asistencia/backend && npm install --production=false
             - if [ "${CargarSemilla}" = "true" ] && [ -f /opt/asistencia/backend/src/seed.js ]; then cd /opt/asistencia/backend && node src/seed.js || true; fi

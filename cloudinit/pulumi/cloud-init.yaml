@@ -164,6 +164,7 @@ runcmd:
 
   # 5. Colocar .env y asegurar permisos
   - cp /root/asistencia.env /opt/asistencia/.env
+  - cp /root/asistencia.env /opt/asistencia/backend/.env
   - chmod 600 /opt/asistencia/.env
   - chown -R asistencia:asistencia /opt/asistencia
 
