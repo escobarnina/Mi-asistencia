@@ -77,7 +77,7 @@ Resources:
           Value: !Sub '${Proyecto}-backend-sg'
         - Key: ManagedBy
           Value: CloudFormation
-        - Key: ManagedBy
+        - Key: k
           Value: my
 
 Outputs:
