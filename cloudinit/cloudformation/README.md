@@ -41,15 +41,18 @@ El script `deploy.ps1` detecta automáticamente si tienes `gh` instalado y te of
 ```powershell
 cd cloudinit\cloudformation
 
-# Opción 1 — Solo inyectar secretos (sin desplegar infraestructura aún):
-.\deploy.ps1 -SoloSecretos
+# Modo A — Pasar credenciales directo como parámetros (no-interactivo, RECOMENDADO):
+.\deploy.ps1 -AwsKeyId "AKIA..." -AwsSecretKey "wJalr..." -AwsRegionSecret "us-east-1"
 
-# Opción 2 — Inyectar secretos Y desplegar en el mismo paso:
+# Modo B — Solo subir secretos sin desplegar infraestructura:
+.\deploy.ps1 -SoloSecretos -AwsKeyId "AKIA..." -AwsSecretKey "wJalr..."
+
+# Modo C — Interactivo (el script pregunta y pide los valores uno a uno):
 .\deploy.ps1
-# (El script te preguntará interactivamente si deseas subir los secretos)
+# Cuando pregunte "Deseas inyectar los 3 secretos?" responde "s"
 ```
 
-El script te pedirá los 3 valores uno por uno y los sube usando `gh secret set`. Al finalizar te muestra el enlace directo a `Settings → Secrets` del repositorio para verificarlos.
+El script sube los 3 secretos usando `gh secret set`. Al finalizar muestra el enlace directo a `Settings → Secrets` del repositorio para verificarlos.
 
 **Requisitos para esta opción:**
 1. Tener [GitHub CLI](https://cli.github.com/) instalado.

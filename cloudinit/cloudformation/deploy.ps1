@@ -23,6 +23,16 @@
 .PARAMETER StackName
     Nombre del stack de CloudFormation. Por defecto: miasistencia-modular-stack.
 
+.PARAMETER AwsKeyId
+    AWS_ACCESS_KEY_ID a inyectar en GitHub. Si se pasa junto con AwsSecretKey,
+    los secretos se suben sin preguntar nada (modo no-interactivo).
+
+.PARAMETER AwsSecretKey
+    AWS_SECRET_ACCESS_KEY a inyectar en GitHub.
+
+.PARAMETER AwsRegionSecret
+    AWS_REGION a inyectar en GitHub. Por defecto usa el valor de -Region.
+
 .PARAMETER SoloSecretos
     Si se especifica, SOLO inyecta los secretos en GitHub y sale sin desplegar infraestructura.
 
@@ -33,8 +43,11 @@
     # Despliegue completo (pide si quieres subir secretos también):
     .\deploy.ps1
 
-    # Solo inyectar secretos en GitHub Actions sin desplegar:
-    .\deploy.ps1 -SoloSecretos
+    # Inyectar secretos pasándolos directo como parámetros (no-interactivo):
+    .\deploy.ps1 -AwsKeyId "AKIA..." -AwsSecretKey "wJalr..." -AwsRegionSecret "us-east-1"
+
+    # Solo inyectar secretos sin desplegar infraestructura:
+    .\deploy.ps1 -SoloSecretos -AwsKeyId "AKIA..." -AwsSecretKey "wJalr..."
 
     # Despliegue sin verificación SSL:
     .\deploy.ps1 -NoVerifySsl
@@ -42,10 +55,14 @@
 
 [CmdletBinding()]
 param(
-    [string]$Region       = "us-east-1",
-    [string]$Branch       = "feat/cloudinit",
-    [string]$AdminPassword = "Admin1234",
-    [string]$StackName    = "miasistencia-modular-stack",
+    [string]$Region          = "us-east-1",
+    [string]$Branch          = "feat/cloudinit",
+    [string]$AdminPassword   = "Admin1234",
+    [string]$StackName       = "miasistencia-modular-stack",
+    # Secretos opcionales: si se pasan, se inyectan sin preguntar nada
+    [string]$AwsKeyId        = "",
+    [string]$AwsSecretKey    = "",
+    [string]$AwsRegionSecret = "",
     [switch]$SoloSecretos,
     [switch]$NoVerifySsl
 )
@@ -99,25 +116,39 @@ if (-not $ghDisponible) {
     } else {
         Write-Host " GitHub CLI detectado y autenticado ✔" -ForegroundColor Green
         Write-Host ""
-        $respuesta = Read-Host " ¿Deseas inyectar (o actualizar) los 3 secretos en GitHub ahora? (s/N)"
-        if ($respuesta -match "^[sS]$") {
+        # Si ya se pasaron las credenciales como parametros, inyectar sin preguntar
+        if (-not [string]::IsNullOrWhiteSpace($AwsKeyId) -and -not [string]::IsNullOrWhiteSpace($AwsSecretKey)) {
+            Write-Host " Credenciales detectadas como parametros, inyectando automaticamente..." -ForegroundColor Cyan
             $inyectarSecretos = $true
+        } else {
+            $respuesta = Read-Host " Deseas inyectar los 3 secretos en GitHub ahora? (s/N)"
+            if ($respuesta -match "^[sS]$") {
+                $inyectarSecretos = $true
+            }
         }
     }
 }
 
 if ($inyectarSecretos) {
-    Write-Host ""
-    Write-Host " Ingresa las credenciales AWS que se guardarán como secretos en GitHub:" -ForegroundColor Cyan
-    Write-Host " (Las credenciales permanentes se obtienen en IAM → Usuarios → Credenciales de seguridad)" -ForegroundColor Gray
-    Write-Host ""
+    # Si las credenciales ya vienen como parámetros, úsalas directamente
+    if (-not [string]::IsNullOrWhiteSpace($AwsKeyId) -and -not [string]::IsNullOrWhiteSpace($AwsSecretKey)) {
+        $keyId     = $AwsKeyId
+        $secretKey = $AwsSecretKey
+        $awsRegion = if ([string]::IsNullOrWhiteSpace($AwsRegionSecret)) { $Region } else { $AwsRegionSecret }
+        Write-Host " Credenciales recibidas como parámetros. No se pedirán interactivamente." -ForegroundColor Cyan
+    } else {
+        Write-Host ""
+        Write-Host " Ingresa las credenciales AWS que se guardarán como secretos en GitHub:" -ForegroundColor Cyan
+        Write-Host " (Las credenciales permanentes se obtienen en IAM → Usuarios → Credenciales de seguridad)" -ForegroundColor Gray
+        Write-Host ""
 
-    $keyId     = Read-Host " AWS_ACCESS_KEY_ID"
-    $secretKey = Read-Host " AWS_SECRET_ACCESS_KEY"
-    $awsRegion = Read-Host " AWS_REGION (Enter para usar '$Region')"
+        $keyId     = Read-Host " AWS_ACCESS_KEY_ID"
+        $secretKey = Read-Host " AWS_SECRET_ACCESS_KEY"
+        $awsRegion = Read-Host " AWS_REGION (Enter para usar '$Region')"
 
-    if ([string]::IsNullOrWhiteSpace($awsRegion)) {
-        $awsRegion = $Region
+        if ([string]::IsNullOrWhiteSpace($awsRegion)) {
+            $awsRegion = $Region
+        }
     }
 
     if ([string]::IsNullOrWhiteSpace($keyId) -or [string]::IsNullOrWhiteSpace($secretKey)) {
