@@ -9,6 +9,8 @@ Este directorio contiene las implementaciones de IaC con **OpenTofu / Terraform*
 ```text
 cloudinit/
 ├── opentofu/
+│   ├── deploy.ps1                   # Despliegue interactivo en 1 clic
+│   ├── destroy.ps1                  # Destrucción interactiva de recursos
 │   ├── bootstrap/                   # Aprovisionamiento del backend remoto (S3 + DynamoDB)
 │   │   ├── main.tf                  # Bucket S3 + DynamoDB Lock + Rol IAM
 │   │   ├── variables.tf             # Parámetros del bootstrap
@@ -66,6 +68,46 @@ Al terminar con éxito, `tofu apply` genera automáticamente `backend.hcl` y `te
 
 ---
 
+
+---
+
+## 🚀 Despliegue Automatizado en 1 Clic (Recomendado)
+
+Cualquier integrante del equipo puede desplegar ejecutando el script interactivo desde PowerShell:
+
+```powershell
+cd cloudinit\opentofu
+.\deploy.ps1
+```
+
+*(Opcional: puedes personalizar parámetros como rama o contraseña)*:
+```powershell
+.\deploy.ps1 -Branch "feat/cloudinit" -AdminPassword "TuPasswordSeguro123" -AutoApprove
+```
+
+### ¿Qué hace el script automáticamente?
+1. Detecta si tienes instalado `tofu` o `terraform`. Si falta, te dice cómo instalarlo.
+2. Verifica tus credenciales de AWS.
+3. Prepara automáticamente `backend.hcl` y `terraform.tfvars` si no existían a partir de sus `.example`.
+4. Ejecuta `tofu init`, genera el plan y aplica en AWS mostrando las URLs finales.
+
+---
+
+## 🧹 Destrucción Automatizada
+
+Para apagar y eliminar las 2 instancias EC2 y sus recursos en AWS:
+
+```powershell
+cd cloudinit\opentofu
+.\destroy.ps1
+```
+
+*(Para omitir la confirmación interactiva de seguridad)*:
+```powershell
+.\destroy.ps1 -Force
+```
+
+---
 ## 2. Módulo `cloudinit/opentofu/aws` (Despliegue de la Aplicación)
 
 ### ¿Cómo funciona `backend.tf`? (Configuración Parcial Limpia)

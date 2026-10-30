@@ -135,13 +135,33 @@ Una vez finalizado el despliegue:
 
 ## 🧹 Limpieza y Destrucción de Recursos
 
-Para eliminar todos los recursos creados en AWS y no incurrir en costos:
+### Opción 1: Con el script interactivo (Recomendado)
 
-```powershell
+`powershell
+cd cloudinit\cloudformation
+.\destroy.ps1
+`
+
+*(Opcional: puedes eliminar también el bucket S3 de plantillas o forzar sin confirmación)*:
+`powershell
+.\destroy.ps1 -Force -DeleteBucket
+`
+
+El script se encargará automáticamente de:
+1. Comprobar que el stack exista.
+2. Solicitar confirmación interactiva de seguridad.
+3. Ejecutar la eliminación en AWS y esperar hasta que termine (wait stack-delete-complete).
+4. (Opcional) Vaciar y borrar el bucket S3 temporal de plantillas.
+
+---
+
+### Opción 2: Con comandos manuales de AWS CLI
+
+`powershell
 aws cloudformation delete-stack --stack-name miasistencia-modular-stack
-```
+`
 
-*(Opcional: Si deseas eliminar también el bucket S3 temporal de plantillas):*
-```powershell
+*(Opcional: Si deseas eliminar también el bucket S3 temporal de plantillas)*:
+`powershell
 aws s3 rb s3://asistencia-cfn-plantillas-<tu-account-id>-us-east-1 --force
-```
+`

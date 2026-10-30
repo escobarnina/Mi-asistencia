@@ -1,73 +1,93 @@
 # Despliegue con Pulumi en Python (Cloud-Init)
 
-Este directorio contiene la infraestructura como código (IaC) para desplegar el **Sistema de Asistencia** en AWS utilizando **Pulumi con Python**, reutilizando la misma plantilla declarativa `cloud-init.yaml`.
+Este directorio contiene la infraestructura como código (IaC) para desplegar el **Sistema de Asistencia** en AWS utilizando **Pulumi con Python**, reutilizando la misma arquitectura y plantilla declarativa `cloud-init.yaml`.
 
 ---
 
-## Estructura Modular
-
-El código está organizado siguiendo las mejores prácticas de modularización en Python:
+## 📁 Estructura Modular
 
 ```text
 cloudinit/pulumi/
+├── deploy.ps1                  # Script automatizado de despliegue en 1 clic
+├── destroy.ps1                 # Script automatizado de destrucción de recursos
 ├── Pulumi.yaml                 # Metadatos del proyecto Pulumi
 ├── Pulumi.dev.yaml.example     # Plantilla de configuración del stack dev
 ├── requirements.txt            # Dependencias Python
-├── __main__.py                 # Orquestador principal (limpio y declarativo)
+├── __main__.py                 # Orquestador principal
+├── cloud-init.yaml             # Configuración unificada de cloud-init
 └── modules/
     ├── __init__.py
     ├── config.py               # Carga y validación de parámetros de configuración
-    ├── security.py             # Generación de llaves SSH, contraseñas y Security Groups
-    ├── cloud_init.py           # Renderizado dinámico de la plantilla cloud-init.yaml
-    └── compute.py              # Aprovisionamiento de VMs EC2 (backend y frontend)
+    ├── security.py             # Llaves SSH, contraseñas y Security Groups
+    ├── cloud_init.py           # Renderizado dinámico de cloud-init.yaml
+    └── compute.py              # Aprovisionamiento de VMs EC2 (asistencia-pulumi-backend y frontend)
 ```
 
 ---
 
-## Requisitos Previos
+## 🚀 Despliegue Automatizado (Recomendado)
 
-1. **Python 3.10+** instalado.
-2. **Pulumi CLI** instalado (`pulumi version`).
-3. **Credenciales de AWS** configuradas en tu terminal (`aws configure` o variables de entorno `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`).
+Cualquier integrante del equipo puede desplegar ejecutando el script interactivo:
 
----
-
-## Despliegue Paso a Paso
-
-### 1. Crear y activar el entorno virtual
 ```powershell
 cd cloudinit\pulumi
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+.\deploy.ps1
 ```
 
-### 2. Inicializar el stack y configurar variables
+*(Opcional: puedes personalizar parámetros como rama o contraseña)*:
 ```powershell
-pulumi stack init dev
-cp Pulumi.dev.yaml.example Pulumi.dev.yaml
+.\deploy.ps1 -Branch "feat/cloudinit" -AdminPassword "TuPasswordSeguro123" -AutoApprove
 ```
 
-Configura tus secretos de forma segura con Pulumi:
+### ¿Qué hace el script automáticamente?
+1. **Comprueba los requisitos:** Verifica que `pulumi`, `python` y las credenciales de AWS estén listas. Si falta algo, te dice exactamente cómo instalarlo o configurarlo.
+2. **Entorno Virtual (venv):** Si no existe, lo crea automáticamente e instala las dependencias de `requirements.txt`.
+3. **Stack `dev`:** Si no existe, lo inicializa y configura los parámetros base.
+4. **Ejecuta `pulumi up`:** Despliega las 2 instancias EC2 y muestra en pantalla las URLs públicas y comandos de acceso.
+
+---
+
+## 🧹 Destrucción Automatizada
+
+Para apagar y eliminar todos los recursos creados en AWS para no generar costos:
+
 ```powershell
-pulumi config set aws:region us-east-1
-pulumi config set repo_rama feat/cloudinit
-pulumi config set --secret admin_password "Asistencia-2026"
+.\destroy.ps1
 ```
 
-### 3. Previsualizar y aplicar
+*(Para omitir la confirmación interactiva)*:
 ```powershell
-pulumi preview
-pulumi up
+.\destroy.ps1 -Force
 ```
 
-### 4. Consultar Salidas
-```powershell
-pulumi stack output url_frontend
-pulumi stack output url_backend_health
-```
+---
 
-### 5. Destrucción de recursos
-```powershell
-pulumi destroy
-```
+## 🛠️ Despliegue Manual Paso a Paso (Alternativo)
+
+Si prefieres ejecutar cada comando de Pulumi a mano:
+
+1. **Crear y activar el entorno virtual:**
+   ```powershell
+   python -m venv venv
+   .\venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   ```
+
+2. **Inicializar stack y variables:**
+   ```powershell
+   pulumi stack init dev
+   pulumi config set aws:region us-east-1
+   pulumi config set repo_rama feat/cloudinit
+   pulumi config set --secret admin_password "Admin1234"
+   ```
+
+3. **Previsualizar y aplicar:**
+   ```powershell
+   pulumi preview
+   pulumi up
+   ```
+
+4. **Destruir manualmente:**
+   ```powershell
+   pulumi destroy
+   ```
