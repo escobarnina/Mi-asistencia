@@ -5,13 +5,11 @@ on:
     branches:
       - main
       - feat/cloudinit
-    paths:
-      - 'cloudinit/cloudformation/**'
-      - '.github/workflows/deploy-cloudformation.yml'
-  push:
-    branches:
-      - main
-      - feat/cloudinit
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - closed
     paths:
       - 'cloudinit/cloudformation/**'
       - '.github/workflows/deploy-cloudformation.yml'
@@ -48,7 +46,7 @@ jobs:
   deploy:
     name: Package and Deploy to AWS
     needs: validate
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'pull_request' && github.event.pull_request.merged == true) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
