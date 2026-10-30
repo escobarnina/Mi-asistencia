@@ -43,7 +43,7 @@ jobs:
       - name: Run cfn-lint
         run: |
           echo "Validating modular CloudFormation templates..."
-          cfn-lint --ignore-checks W3002 cloudinit/cloudformation/main.yaml cloudinit/cloudformation/modules/*.yaml
+          cfn-lint -i W3002 -t cloudinit/cloudformation/main.yaml cloudinit/cloudformation/modules/backend.yaml cloudinit/cloudformation/modules/frontend.yaml cloudinit/cloudformation/modules/security.yaml
 
   deploy:
     name: Package and Deploy to AWS
