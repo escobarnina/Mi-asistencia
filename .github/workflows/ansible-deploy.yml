@@ -2,13 +2,13 @@ name: CI/CD Pipeline - CloudFormation & Ansible Deploy
 
 on:
   pull_request:
-    branches: [ main, develop, feat/tvmsl ]
+    branches: [ main, develop ]
     paths:
       - 'tvms/**'
       - 'frontend/**'
       - 'backend/**'
   push:
-    branches: [ main, develop, feat/tvmsl ]
+    branches: [ main, develop ]
     paths:
       - 'tvms/**'
       - 'frontend/**'
@@ -17,7 +17,7 @@ on:
 
 jobs:
   # -------------------------------------------------------------
-  # FASE 1: CI (En cada PR) - Validación de sintaxis y calidad
+  # FASE 1: CI (En cada PR) - Validación de sintaxis
   # -------------------------------------------------------------
   ci-validate:
     name: Lint & Sintaxis de Ansible y CloudFormation
@@ -26,16 +26,20 @@ jobs:
       - name: Checkout del código
         uses: actions/checkout@v4
 
-      - name: Instalar Python y Ansible
+      - name: Instalar Python y dependencias
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Instalar dependencias de validación
+      - name: Instalar herramientas de validación
         run: |
-          pip install ansible ansible-lint yamllint cfn-lint
+          pip install ansible cfn-lint
 
-      - name: Validar sintaxis de Playbooks de Ansible
+      - name: Validar sintaxis de CloudFormation
+        run: |
+          cfn-lint tvms/cloudformation/main.yaml tvms/cloudformation/modules/*.yaml
+
+      - name: Validar sintaxis de Playbooks Ansible
         run: |
           cd tvms/ansible
           ansible-playbook --syntax-check ping.yml
@@ -44,16 +48,11 @@ jobs:
           ansible-playbook --syntax-check playbooks/03-frontend.yml
           ansible-playbook --syntax-check site.yml
 
-      - name: Validar sintaxis de CloudFormation
-        run: |
-          cfn-lint tvms/cloudformation/main.yaml tvms/cloudformation/modules/*.yaml
-
   # -------------------------------------------------------------
-  # FASE 2: CD (Al hacer MERGE o PUSH a la rama objetivo)
-  # Despliegue automático de configuración sobre los servidores EC2
+  # FASE 2: CD (Al hacer MERGE a main/develop) - Despliegue en AWS
   # -------------------------------------------------------------
   cd-deploy:
-    name: Desplegar cambios con Ansible en AWS
+    name: Desplegar Infraestructura y Configurar con Ansible
     needs: ci-validate
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -73,22 +72,62 @@ jobs:
           sudo apt update
           sudo apt install -y ansible
 
-      - name: Configurar llave privada SSH desde GitHub Secrets
+      - name: Inyectar o crear KeyPair en AWS y Llave SSH local
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/asistencia-devops-key.pem
+          if [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/asistencia-devops-key.pem
+          else
+            # Si no hay secreto cargado, verificar o generar KeyPair en AWS
+            KEY_MATERIAL=$(aws ec2 create-key-pair --key-name asistencia-devops-key --query "KeyMaterial" --output text 2>/dev/null || true)
+            if [ -n "$KEY_MATERIAL" ]; then
+              echo "$KEY_MATERIAL" > ~/.ssh/asistencia-devops-key.pem
+            fi
+          fi
           chmod 600 ~/.ssh/asistencia-devops-key.pem
 
-      - name: Descubrir IPs de CloudFormation y armar inventario dinámico
+      - name: Asegurar Bucket S3 y Desplegar CloudFormation Stack
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+          REGION="${{ secrets.AWS_REGION || 'us-east-1' }}"
+          BUCKET="asistencia-cfn-plantillas-${ACCOUNT_ID}-${REGION}"
+          
+          # Crear bucket de plantillas si no existe
+          aws s3api head-bucket --bucket "$BUCKET" 2>/dev/null || {
+            if [ "$REGION" = "us-east-1" ]; then
+              aws s3api create-bucket --bucket "$BUCKET" --region "$REGION"
+            else
+              aws s3api create-bucket --bucket "$BUCKET" --region "$REGION" --create-bucket-configuration LocationConstraint="$REGION"
+            fi
+          }
+
+          VPC_ID=$(aws ec2 describe-vpcs --filters "Name=isDefault,Values=true" --query "Vpcs[0].VpcId" --output text)
+          SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=vpc-id,Values=$VPC_ID" "Name=default-for-az,Values=true" --query "Subnets[0].SubnetId" --output text)
+
+          # Empaquetar y desplegar
+          aws cloudformation package \
+            --template-file tvms/cloudformation/main.yaml \
+            --s3-bucket "$BUCKET" \
+            --s3-prefix "cloudformation" \
+            --output-template-file tvms/cloudformation/packaged.yaml
+
+          aws cloudformation deploy \
+            --template-file tvms/cloudformation/packaged.yaml \
+            --stack-name miasistencia-modular-stack \
+            --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+                VpcId=$VPC_ID \
+                SubnetId=$SUBNET_ID \
+                KeyName=asistencia-devops-key
+
+      - name: Generar Inventario Ansible con IPs obtenidas
         run: |
           cd tvms/ansible
-          
-          # Extraer IPs desde CloudFormation
           FRONTEND_IP=$(aws cloudformation describe-stacks --stack-name miasistencia-modular-stack --query "Stacks[0].Outputs[?OutputKey=='FrontendIP'].OutputValue" --output text)
           BACKEND_IP=$(aws cloudformation describe-stacks --stack-name miasistencia-modular-stack --query "Stacks[0].Outputs[?OutputKey=='BackendIP'].OutputValue" --output text)
           DATABASE_IP=$(aws cloudformation describe-stacks --stack-name miasistencia-modular-stack --query "Stacks[0].Outputs[?OutputKey=='DatabaseIP'].OutputValue" --output text)
-          
-          # Generar inventario.ini
+
           cat <<EOF > inventario.ini
           [frontend]
           $FRONTEND_IP
@@ -105,24 +144,15 @@ jobs:
           ansible_ssh_common_args='-o StrictHostKeyChecking=no'
           EOF
 
-      - name: Configurar variables desde plantilla .example
-        run: |
-          cd tvms/ansible
+          # Preparar group_vars
           if [ ! -f group_vars/all.yml ]; then
             cp group_vars/all.yml.example group_vars/all.yml
-            # Inyectar contraseñas reales si se configuraron en GitHub Secrets (o mantener defaults)
-            if [ -n "${{ secrets.DB_PASSWORD }}" ]; then
-              sed -i "s/CHANGE_ME_DB_PASSWORD/${{ secrets.DB_PASSWORD }}/" group_vars/all.yml
-            fi
-            if [ -n "${{ secrets.JWT_SECRET }}" ]; then
-              sed -i "s/CHANGE_ME_JWT_SECRET_KEY/${{ secrets.JWT_SECRET }}/" group_vars/all.yml
-            fi
-            if [ -n "${{ secrets.ADMIN_PASSWORD }}" ]; then
-              sed -i "s/CHANGE_ME_ADMIN_PASSWORD/${{ secrets.ADMIN_PASSWORD }}/" group_vars/all.yml
-            fi
           fi
 
-      - name: Ejecutar Ansible Playbook (Aprovisionar Servidores)
+      - name: Pausa de estabilización SSH (20 segundos)
+        run: sleep 20
+
+      - name: Ejecutar Ansible Playbook (Aprovisionar los 3 Servidores)
         run: |
           cd tvms/ansible
           ANSIBLE_CONFIG=./ansible.cfg ansible-playbook site.yml
