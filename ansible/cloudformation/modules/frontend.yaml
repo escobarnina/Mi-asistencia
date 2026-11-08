@@ -1,0 +1,134 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Modulo de Instancia EC2 Frontend (React/Vite + Nginx) con Cloud-Init'
+
+Parameters:
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+  BackendPrivateIp:
+    Type: String
+    Description: IP privada del backend para configurar la URL del API
+  InstanceType:
+    Type: String
+    Default: 't3.small'
+  Proyecto:
+    Type: String
+    Default: 'asistencia'
+  RepoUrl:
+    Type: String
+    Default: 'https://github.com/escobarnina/Mi-asistencia.git'
+  RepoRama:
+    Type: String
+    Default: 'feat/cloudinit'
+  UbuntuAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id'
+
+Resources:
+  FrontendInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref UbuntuAmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #cloud-config
+          package_update: true
+          package_upgrade: false
+          packages:
+            - curl
+            - git
+            - ca-certificates
+            - gnupg
+            - ufw
+            - nginx
+
+          write_files:
+            - path: /etc/nginx/sites-available/asistencia
+              permissions: "0644"
+              owner: root:root
+              content: |
+                server {
+                    listen 80;
+                    server_name _;
+                    root /opt/asistencia/frontend/dist;
+                    index index.html;
+
+                    location / {
+                        try_files $uri $uri/ /index.html;
+                    }
+
+                    location /api {
+                        proxy_pass http://${BackendPrivateIp}:8000;
+                        proxy_http_version 1.1;
+                        proxy_set_header Upgrade $http_upgrade;
+                        proxy_set_header Connection 'upgrade';
+                        proxy_set_header Host $host;
+                        proxy_cache_bypass $http_upgrade;
+                        proxy_set_header X-Real-IP $remote_addr;
+                        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    }
+                }
+
+            - path: /root/asistencia.env
+              permissions: "0600"
+              owner: root:root
+              content: |
+                VITE_API_URL=http://${BackendPrivateIp}:8000
+
+          runcmd:
+            - set -eux
+            - timedatectl set-timezone America/La_Paz
+            - if [ ! -f /swapfile ]; then fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && echo '/swapfile none swap sw 0 0' >> /etc/fstab; fi
+            - mkdir -p /etc/apt/keyrings
+            - curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+            - echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
+            - apt-get update -y
+            - apt-get install -y nodejs
+            - rm -rf /opt/asistencia
+            - git clone --depth 1 -b ${RepoRama} ${RepoUrl} /opt/asistencia
+            - cp /root/asistencia.env /opt/asistencia/frontend/.env
+            - cd /opt/asistencia/frontend && npm install
+            - cd /opt/asistencia/frontend && npm run build
+            - rm -f /etc/nginx/sites-enabled/default
+            - ln -sf /etc/nginx/sites-available/asistencia /etc/nginx/sites-enabled/asistencia
+            - nginx -t
+            - systemctl restart nginx
+            - systemctl enable nginx
+            - ufw allow 22/tcp || true
+            - ufw allow 80/tcp || true
+            - ufw allow 443/tcp || true
+            - ufw --force enable || true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Proyecto}-cfn-frontend'
+        - Key: Rol
+          Value: frontend
+        - Key: Herramienta
+          Value: cloudformation
+        - Key: ManagedBy
+          Value: CloudFormation
+
+Outputs:
+  FrontendInstanceId:
+    Description: ID de la instancia frontend
+    Value: !Ref FrontendInstance
+  FrontendPublicIp:
+    Description: IP publica del frontend
+    Value: !GetAtt FrontendInstance.PublicIp
+  FrontendUrl:
+    Description: URL publica del sitio web
+    Value: !Sub 'http://${FrontendInstance.PublicIp}'

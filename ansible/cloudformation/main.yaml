@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Orquestador Principal Modular - Sistema de Asistencia (CloudFormation Stacks Anidados)'
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC donde se desplegara la infraestructura
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subred publica donde se crearan las instancias
+  InstanceType:
+    Type: String
+    Default: 't3.small'
+    AllowedValues:
+      - 't2.micro'
+      - 't3.micro'
+      - 't3.small'
+    Description: Tipo de instancia EC2
+  MiIp:
+    Type: String
+    Default: '0.0.0.0/0'
+    Description: CIDR permitido para administracion SSH
+  Proyecto:
+    Type: String
+    Default: 'asistencia'
+    Description: Prefijo para nombrar recursos
+  RepoUrl:
+    Type: String
+    Default: 'https://github.com/escobarnina/Mi-asistencia.git'
+    Description: Repositorio Git
+  RepoRama:
+    Type: String
+    Default: 'feat/cloudinit'
+    Description: Rama a clonar
+  DbPassword:
+    Type: String
+    NoEcho: true
+    Default: 'AsistenciaSecretDb2026!'
+    Description: Contrasena de MariaDB
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    Default: 'SuperSecretKeyForJWTAuthTokenAsistenciaApp2026!'
+    Description: Secreto JWT
+  AdminEmail:
+    Type: String
+    Default: 'admin@ejemplo.com'
+    Description: Email inicial del administrador
+  AdminPassword:
+    Type: String
+    NoEcho: true
+    Default: 'Admin1234'
+    Description: Password del administrador
+  CargarSemilla:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Cargar datos iniciales de prueba (seed.js)
+
+Resources:
+  # Par de llaves SSH creado directamente por CloudFormation (sin depender de llaves locales)
+  KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Sub '${Proyecto}-${AWS::StackName}-key'
+      KeyType: ed25519
+      Tags:
+        - Key: Name
+          Value: !Sub '${Proyecto}-key'
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # 1. Modulo de Seguridad
+  SecurityStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: './modules/security.yaml'
+      Parameters:
+        VpcId: !Ref VpcId
+        MiIp: !Ref MiIp
+        Proyecto: !Ref Proyecto
+
+  # 2. Modulo de Backend
+  BackendStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: './modules/backend.yaml'
+      Parameters:
+        SubnetId: !Ref SubnetId
+        SecurityGroupId: !GetAtt SecurityStack.Outputs.BackendSecurityGroupId
+        KeyName: !Ref KeyPair
+        InstanceType: !Ref InstanceType
+        Proyecto: !Ref Proyecto
+        RepoUrl: !Ref RepoUrl
+        RepoRama: !Ref RepoRama
+        DbPassword: !Ref DbPassword
+        JwtSecret: !Ref JwtSecret
+        AdminEmail: !Ref AdminEmail
+        AdminPassword: !Ref AdminPassword
+        CargarSemilla: !Ref CargarSemilla
+
+  # 3. Modulo de Frontend
+  FrontendStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: './modules/frontend.yaml'
+      Parameters:
+        SubnetId: !Ref SubnetId
+        SecurityGroupId: !GetAtt SecurityStack.Outputs.FrontendSecurityGroupId
+        KeyName: !Ref KeyPair
+        BackendPrivateIp: !GetAtt BackendStack.Outputs.BackendPrivateIp
+        InstanceType: !Ref InstanceType
+        Proyecto: !Ref Proyecto
+        RepoUrl: !Ref RepoUrl
+        RepoRama: !Ref RepoRama
+
+Outputs:
+  KeyName:
+    Description: Nombre de la llave SSH generada en AWS
+    Value: !Ref KeyPair
+  FrontendUrl:
+    Description: URL publica de la aplicacion (Frontend)
+    Value: !GetAtt FrontendStack.Outputs.FrontendUrl
+  BackendApiUrl:
+    Description: URL publica del API Backend
+    Value: !GetAtt BackendStack.Outputs.BackendApiUrl
+  BackendPrivateIp:
+    Description: IP privada del backend usada por el frontend
+    Value: !GetAtt BackendStack.Outputs.BackendPrivateIp
+  FrontendPublicIp:
+    Description: IP publica de la instancia frontend
+    Value: !GetAtt FrontendStack.Outputs.FrontendPublicIp
+  BackendPublicIp:
+    Description: IP publica de la instancia backend
+    Value: !GetAtt BackendStack.Outputs.BackendPublicIp
