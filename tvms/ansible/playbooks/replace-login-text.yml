@@ -1,0 +1,31 @@
+---
+- name: Reemplazar textos específicos en Login.jsx y compilar
+  hosts: frontend
+  become: true
+  vars:
+    # Ejemplo de textos a personalizar:
+    nuevo_titulo: "Sistema de Control de Asistencia Institucional"
+    nuevo_subtitulo: "Plataforma oficial para registro de presencia y seguimiento estudiantil."
+  tasks:
+    - name: Modificar título en Login.jsx
+      ansible.builtin.replace:
+        path: /opt/asistencia/frontend/src/pages/Login.jsx
+        regexp: '<h2>.*?</h2>'
+        replace: '<h2>{{ nuevo_titulo }}</h2>'
+
+    - name: Modificar subtítulo en Login.jsx
+      ansible.builtin.replace:
+        path: /opt/asistencia/frontend/src/pages/Login.jsx
+        regexp: '<p>Marca tu presencia.*?<\/p>'
+        replace: '<p>{{ nuevo_subtitulo }}</p>'
+
+    - name: Recompilar Vite frontend
+      ansible.builtin.shell: |
+        npm run build
+      args:
+        chdir: /opt/asistencia/frontend
+
+    - name: Recargar Nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded

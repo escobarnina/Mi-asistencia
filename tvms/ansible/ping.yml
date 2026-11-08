@@ -1,0 +1,7 @@
+---
+- name: Validar conectividad SSH con los servidores gestionados
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Comprobar respuesta ping de Ansible
+      ansible.builtin.ping:

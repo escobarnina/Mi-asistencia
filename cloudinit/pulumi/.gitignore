@@ -1,7 +1,0 @@
-venv/
-.env
-__pycache__/
-*.pyc
-.pulumi/
-Pulumi.*.yaml
-!Pulumi.dev.yaml.example

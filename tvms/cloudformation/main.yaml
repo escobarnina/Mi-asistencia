@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Orquestador Principal Modular - Sistema de Asistencia (CloudFormation Nested Stacks)'
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC donde se desplegara la infraestructura
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subred publica donde se crearan las instancias
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Nombre del KeyPair existente en AWS para conexion SSH
+  InstanceType:
+    Type: String
+    Default: 't3.small'
+    AllowedValues:
+      - 't2.micro'
+      - 't3.micro'
+      - 't3.small'
+    Description: Tipo de instancia EC2
+  MiIp:
+    Type: String
+    Default: '0.0.0.0/0'
+    Description: CIDR permitido para administracion SSH
+  Proyecto:
+    Type: String
+    Default: 'asistencia'
+    Description: Prefijo para nombrar recursos
+
+Resources:
+  # 1. Modulo de Seguridad
+  SecurityStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: './modules/security.yaml'
+      Parameters:
+        VpcId: !Ref VpcId
+        MiIp: !Ref MiIp
+        Proyecto: !Ref Proyecto
+
+  # 2. Modulo de Base de Datos
+  DatabaseStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: './modules/database.yaml'
+      Parameters:
+        SubnetId: !Ref SubnetId
+        SecurityGroupId: !GetAtt SecurityStack.Outputs.DatabaseSecurityGroupId
+        KeyName: !Ref KeyName
+        InstanceType: !Ref InstanceType
+        Proyecto: !Ref Proyecto
+
+  # 3. Modulo de Backend
+  BackendStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: './modules/backend.yaml'
+      Parameters:
+        SubnetId: !Ref SubnetId
+        SecurityGroupId: !GetAtt SecurityStack.Outputs.BackendSecurityGroupId
+        KeyName: !Ref KeyName
+        InstanceType: !Ref InstanceType
+        Proyecto: !Ref Proyecto
+
+  # 4. Modulo de Frontend
+  FrontendStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: './modules/frontend.yaml'
+      Parameters:
+        SubnetId: !Ref SubnetId
+        SecurityGroupId: !GetAtt SecurityStack.Outputs.FrontendSecurityGroupId
+        KeyName: !Ref KeyName
+        InstanceType: !Ref InstanceType
+        Proyecto: !Ref Proyecto
+
+Outputs:
+  FrontendIP:
+    Description: IP publica de la instancia Frontend
+    Value: !GetAtt FrontendStack.Outputs.FrontendPublicIp
+  BackendIP:
+    Description: IP publica de la instancia Backend
+    Value: !GetAtt BackendStack.Outputs.BackendPublicIp
+  DatabaseIP:
+    Description: IP publica de la instancia Database
+    Value: !GetAtt DatabaseStack.Outputs.DatabasePublicIp
+  BackendPrivateIP:
+    Description: IP privada de la instancia Backend
+    Value: !GetAtt BackendStack.Outputs.BackendPrivateIp
+  DatabasePrivateIP:
+    Description: IP privada de la instancia Database
+    Value: !GetAtt DatabaseStack.Outputs.DatabasePrivateIp
+  FrontendUrl:
+    Description: URL publica de la aplicacion Frontend
+    Value: !GetAtt FrontendStack.Outputs.FrontendUrl
+  BackendApiUrl:
+    Description: URL publica del API Backend
+    Value: !GetAtt BackendStack.Outputs.BackendApiUrl

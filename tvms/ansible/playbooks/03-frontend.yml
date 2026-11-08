@@ -1,0 +1,107 @@
+---
+- name: 03. Configuración del Servidor Frontend (React/Vite + Nginx)
+  hosts: frontend
+  become: true
+  tasks:
+    - name: Configurar Zona Horaria
+      community.general.timezone:
+        name: "{{ tz }}"
+      ignore_errors: true
+
+    - name: Instalar paquetes base y Nginx
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+        pkg:
+          - curl
+          - git
+          - ca-certificates
+          - gnupg
+          - ufw
+          - nginx
+
+    - name: Configurar repositorio oficial de Node.js 20.x
+      ansible.builtin.shell: |
+        mkdir -p /etc/apt/keyrings
+        curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor --yes -o /etc/apt/keyrings/nodesource.gpg
+        echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" > /etc/apt/sources.list.d/nodesource.list
+      args:
+        creates: /etc/apt/sources.list.d/nodesource.list
+
+    - name: Instalar Node.js 20
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+        update_cache: true
+
+    - name: Clonar repositorio del proyecto
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: /opt/asistencia
+        version: "{{ repo_branch }}"
+        force: true
+
+    - name: Determinar IP o Host del Backend
+      ansible.builtin.set_fact:
+        backend_host: "{{ hostvars[groups['backend'][0]]['ansible_default_ipv4']['address'] | default(groups['backend'][0]) }}"
+
+    - name: Generar archivo .env para el Frontend
+      ansible.builtin.copy:
+        dest: /opt/asistencia/frontend/.env
+        mode: '0644'
+        content: |
+          VITE_API_URL=http://{{ backend_host }}:{{ backend_port }}
+
+    - name: Instalar dependencias npm del frontend
+      ansible.builtin.shell: |
+        npm install
+      args:
+        chdir: /opt/asistencia/frontend
+
+    - name: Compilar build de producción del Frontend (Vite)
+      ansible.builtin.shell: |
+        npm run build
+      args:
+        chdir: /opt/asistencia/frontend
+
+    - name: Configurar virtual host de Nginx con Reverse Proxy al Backend
+      ansible.builtin.template:
+        src: ../templates/nginx-asistencia.conf.j2
+        dest: /etc/nginx/sites-available/asistencia
+        mode: '0644'
+      notify: Reiniciar Nginx
+
+    - name: Deshabilitar sitio default de Nginx
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Reiniciar Nginx
+
+    - name: Habilitar sitio de asistencia en Nginx
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/asistencia
+        dest: /etc/nginx/sites-enabled/asistencia
+        state: link
+      notify: Reiniciar Nginx
+
+    - name: Iniciar y habilitar servicio Nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: started
+        enabled: true
+
+    - name: Configurar Firewall UFW (SSH, HTTP, HTTPS)
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - "22"
+        - "80"
+        - "443"
+
+  handlers:
+    - name: Reiniciar Nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: restarted

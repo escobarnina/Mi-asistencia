@@ -1,0 +1,120 @@
+---
+- name: 02. Configuración del Servidor Backend (Node.js + Express)
+  hosts: backend
+  become: true
+  tasks:
+    - name: Configurar Zona Horaria
+      community.general.timezone:
+        name: "{{ tz }}"
+      ignore_errors: true
+
+    - name: Instalar paquetes base y cliente MySQL
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+        pkg:
+          - curl
+          - git
+          - ca-certificates
+          - gnupg
+          - ufw
+          - mariadb-client
+          - python3
+          - python3-pymysql
+
+    - name: Configurar repositorio oficial de Node.js 20.x
+      ansible.builtin.shell: |
+        mkdir -p /etc/apt/keyrings
+        curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor --yes -o /etc/apt/keyrings/nodesource.gpg
+        echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" > /etc/apt/sources.list.d/nodesource.list
+      args:
+        creates: /etc/apt/sources.list.d/nodesource.list
+
+    - name: Instalar Node.js 20
+      ansible.builtin.apt:
+        name: nodejs
+        state: present
+        update_cache: true
+
+    - name: Clonar repositorio del proyecto
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: /opt/asistencia
+        version: "{{ repo_branch }}"
+        force: true
+
+    - name: Determinar IP privada de la Base de Datos
+      ansible.builtin.set_fact:
+        db_private_host: "{{ hostvars[groups['database'][0]]['ansible_default_ipv4']['address'] | default(groups['database'][0]) }}"
+
+    - name: Generar archivo .env para el Backend
+      ansible.builtin.template:
+        src: ../templates/backend.env.j2
+        dest: /opt/asistencia/backend/.env
+        mode: '0600'
+
+    - name: Copiar .env a la raíz del proyecto
+      ansible.builtin.copy:
+        src: /opt/asistencia/backend/.env
+        dest: /opt/asistencia/.env
+        remote_src: true
+        mode: '0600'
+
+    - name: Importar esquema inicial y datos de prueba init.sql en la Base de Datos
+      ansible.builtin.shell: |
+        mysql -h {{ db_private_host }} -u {{ db_user }} -p'{{ db_password }}' {{ db_name }} < /opt/asistencia/backend/init.sql
+      register: db_import
+      failed_when: false
+
+    - name: Instalar dependencias npm del backend
+      ansible.builtin.shell: |
+        npm install --production=false
+      args:
+        chdir: /opt/asistencia/backend
+
+    - name: Cargar datos de prueba (seed) si está activado
+      ansible.builtin.shell: |
+        node src/seed.js || true
+      args:
+        chdir: /opt/asistencia/backend
+      when: seed_data | bool
+
+    - name: Crear servicio systemd para asistencia-backend
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/asistencia-backend.service
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Asistencia Backend Service
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=root
+          WorkingDirectory=/opt/asistencia/backend
+          Environment=NODE_ENV=production
+          EnvironmentFile=/opt/asistencia/backend/.env
+          ExecStart=/usr/bin/npm start
+          Restart=always
+          RestartSec=5
+          StandardOutput=journal
+          StandardError=journal
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Recargar systemd y arrancar backend
+      ansible.builtin.systemd:
+        name: asistencia-backend
+        daemon_reload: true
+        state: restarted
+        enabled: true
+
+    - name: Configurar Firewall UFW (SSH y Backend API)
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - "22"
+        - "{{ backend_port }}"

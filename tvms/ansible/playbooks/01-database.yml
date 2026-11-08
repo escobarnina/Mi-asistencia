@@ -1,0 +1,72 @@
+---
+- name: 01. Configuración de Base de Datos MySQL / MariaDB
+  hosts: database
+  become: true
+  tasks:
+    - name: Configurar Zona Horaria
+      community.general.timezone:
+        name: "{{ tz }}"
+      ignore_errors: true
+
+    - name: Actualizar cache apt e instalar dependencias básicas
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+        pkg:
+          - curl
+          - git
+          - ca-certificates
+          - gnupg
+          - ufw
+          - python3
+          - python3-pip
+          - python3-pymysql
+
+    - name: Instalar MariaDB Server y Cliente
+      ansible.builtin.apt:
+        pkg:
+          - mariadb-server
+          - mariadb-client
+        state: present
+
+    - name: Asegurar que MariaDB está iniciado y habilitado
+      ansible.builtin.systemd:
+        name: mariadb
+        state: started
+        enabled: true
+
+    - name: Configurar MariaDB para escuchar en todas las interfaces (bind-address = 0.0.0.0)
+      ansible.builtin.lineinfile:
+        path: /etc/mysql/mariadb.conf.d/50-server.cnf
+        regexp: '^bind-address\s*='
+        line: 'bind-address = 0.0.0.0'
+      notify: Reiniciar MariaDB
+
+    - name: Flush handlers para aplicar bind-address de inmediato
+      ansible.builtin.meta: flush_handlers
+
+    - name: Crear base de datos
+      ansible.builtin.shell: |
+        mysql -e "CREATE DATABASE IF NOT EXISTS {{ db_name }} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+    - name: Crear usuario de base de datos con acceso desde cualquier host (%)
+      ansible.builtin.shell: |
+        mysql -e "CREATE USER IF NOT EXISTS '{{ db_user }}'@'%' IDENTIFIED BY '{{ db_password }}';"
+        mysql -e "ALTER USER '{{ db_user }}'@'%' IDENTIFIED BY '{{ db_password }}';"
+        mysql -e "GRANT ALL PRIVILEGES ON {{ db_name }}.* TO '{{ db_user }}'@'%';"
+        mysql -e "FLUSH PRIVILEGES;"
+
+    - name: Configurar Firewall UFW (SSH y MySQL)
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - "22"
+        - "{{ db_port }}"
+
+  handlers:
+    - name: Reiniciar MariaDB
+      ansible.builtin.systemd:
+        name: mariadb
+        state: restarted

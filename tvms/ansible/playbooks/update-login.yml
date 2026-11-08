@@ -1,0 +1,27 @@
+---
+- name: Actualizar componente Login.jsx en el Servidor Frontend
+  hosts: frontend
+  become: true
+  tasks:
+    - name: 1. Copiar archivo Login.jsx modificado desde la máquina local al servidor
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../../frontend/src/pages/Login.jsx"
+        dest: /opt/asistencia/frontend/src/pages/Login.jsx
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: 2. Recompilar el frontend React/Vite para generar los nuevos bundles estáticos
+      ansible.builtin.shell: |
+        npm run build
+      args:
+        chdir: /opt/asistencia/frontend
+
+    - name: 3. Recargar Nginx para servir la nueva compilación
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+
+    - name: 4. Confirmación de despliegue exitoso
+      ansible.builtin.debug:
+        msg: "Login.jsx actualizado y compilado con éxito en http://{{ inventory_hostname }}/login"

@@ -1,0 +1,9 @@
+# Ignorar archivos generados en tiempo de ejecución
+inventario.ini
+ansible.cfg
+
+# Ignorar secretos de Ansible y llaves SSH
+*.pem
+*.key
+*.retry
+group_vars/all.yml

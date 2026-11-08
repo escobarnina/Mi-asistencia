@@ -1,0 +1,10 @@
+---
+# Playbook Master para configurar los 3 servidores EC2 sin cloud-init
+- name: "Paso 1: Despliegue y Configuración de Base de Datos MySQL"
+  import_playbook: playbooks/01-database.yml
+
+- name: "Paso 2: Despliegue y Configuración de Backend API"
+  import_playbook: playbooks/02-backend.yml
+
+- name: "Paso 3: Despliegue y Configuración de Frontend Nginx/Vite"
+  import_playbook: playbooks/03-frontend.yml

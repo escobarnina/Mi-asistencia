@@ -1,0 +1,4 @@
+# Ignorar llaves privadas y temporales en la raiz de tvms
+*.pem
+*.key
+*.log

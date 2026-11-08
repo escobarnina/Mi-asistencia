@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Modulo de Instancia EC2 Base de Datos MySQL (Limpia para provisionamiento Ansible)'
+
+Parameters:
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+  SecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+  InstanceType:
+    Type: String
+    Default: 't3.small'
+  Proyecto:
+    Type: String
+    Default: 'asistencia'
+  UbuntuAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id'
+
+Resources:
+  DatabaseInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref UbuntuAmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 20
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${Proyecto}-cfn-database'
+        - Key: Rol
+          Value: database
+        - Key: ManagedBy
+          Value: CloudFormation
+
+Outputs:
+  DatabaseInstanceId:
+    Description: ID de la instancia de Base de Datos
+    Value: !Ref DatabaseInstance
+  DatabasePrivateIp:
+    Description: IP privada de la instancia de Base de Datos
+    Value: !GetAtt DatabaseInstance.PrivateIp
+  DatabasePublicIp:
+    Description: IP publica de la instancia de Base de Datos
+    Value: !GetAtt DatabaseInstance.PublicIp
