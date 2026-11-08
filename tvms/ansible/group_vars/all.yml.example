@@ -3,7 +3,7 @@
 # Copia este archivo a 'all.yml' e ingresa tus valores reales
 proyecto: asistencia
 repo_url: "https://github.com/escobarnina/Mi-asistencia.git"
-repo_branch: "feat/tvms"
+repo_branch: "feat/tvmslo"
 
 # Base de Datos MariaDB / MySQL
 db_port: 3306
