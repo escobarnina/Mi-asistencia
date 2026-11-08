@@ -2,13 +2,13 @@ name: CI/CD Pipeline - CloudFormation & Ansible Deploy
 
 on:
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develop, feat/tvmsl ]
     paths:
       - 'tvms/**'
       - 'frontend/**'
       - 'backend/**'
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, feat/tvmsl ]
     paths:
       - 'tvms/**'
       - 'frontend/**'
