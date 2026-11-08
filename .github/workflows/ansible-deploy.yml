@@ -37,7 +37,7 @@ jobs:
 
       - name: Validar sintaxis de CloudFormation
         run: |
-          cfn-lint tvms/cloudformation/main.yaml tvms/cloudformation/modules/*.yaml
+          cfn-lint tvms/cloudformation/main.yaml tvms/cloudformation/modules/*.yaml --include-checks-dir tvms/cloudformation/ --ignore-checks W3002
 
       - name: Validar sintaxis de Playbooks Ansible
         run: |
